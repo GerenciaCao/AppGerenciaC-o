@@ -27,6 +27,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.FabPosition
 
+// Habilita a prévia no Android Studio.
+import androidx.compose.ui.tooling.preview.Preview
+
 // Uma unica origem para as cores, margens e medidas do cabecalho de todas as telas internas.
 internal val LaranjaPadraoApp = Color(0xFFFFAE49)
 internal val FundoPadraoApp = Color(0xFFFFFCF7)
@@ -43,7 +46,9 @@ data class DadosCabecalhoApp(
     val aoParcerias: () -> Unit = {},
     val aoSair: () -> Unit = {},
     val aoNotificacoes: (() -> Unit)? = null,
-    val aoDescartarRascunho: () -> Unit = {}
+    val aoDescartarRascunho: () -> Unit = {},
+    // Controla em quais telas a saudação da pessoa aparece.
+    val mostrarSaudacao: Boolean = true
 )
 
 // O valor padrao permite abrir Previews sem uma Activity, sem fixar dados no aplicativo real.
@@ -71,11 +76,33 @@ fun CabecalhoPadraoApp(interceptarNavegacao: (() -> Unit) -> Unit = { it() }) {
                 fontWeight = FontWeight.Bold, color = MarromPadraoApp)
         }
         Spacer(Modifier.width(12.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            val primeiroNome = dados.nome.trim().substringBefore(" ")
-            Text(if (primeiroNome.isBlank()) "Olá!" else "Olá, $primeiroNome!", fontSize = 21.sp,
-                lineHeight = 25.sp, fontWeight = FontWeight.Bold, color = TextoPadraoApp)
-            Text(dados.categoria, fontSize = 11.sp, lineHeight = 15.sp, color = MarromPadraoApp)
+        // Mostra a saudação somente quando a tela permitir.
+// O nome vem dos dados do perfil, sem fixar "Helena".
+        if (dados.mostrarSaudacao) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                val primeiroNome = dados.nome.trim().substringBefore(" ")
+
+                Text(
+                    text = if (primeiroNome.isBlank()) "Olá!" else "Olá, $primeiroNome!",
+                    fontSize = 21.sp,
+                    lineHeight = 25.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextoPadraoApp
+                )
+
+                Text(
+                    text = dados.categoria,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = MarromPadraoApp
+                )
+            }
+        } else {
+            // Mantém o avatar à esquerda e os três pontos à direita.
+            Spacer(Modifier.weight(1f))
         }
         Spacer(Modifier.width(6.dp))
         Box {
@@ -151,16 +178,87 @@ fun MolduraPadraoApp(
     }
 }
 
-// Padroniza os titulos de pagina; a seta de voltar fica no conteudo, sem deslocar o avatar.
+// Padroniza os títulos e o botão de voltar das telas internas.
 @Composable
-fun TituloPaginaPadrao(titulo: String, aoVoltar: (() -> Unit)? = null, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (aoVoltar != null) IconButton(onClick = aoVoltar,
-            modifier = Modifier.semantics { contentDescription = "Voltar" }) {
-            Text("←", fontSize = 27.sp, color = MarromPadraoApp)
+fun TituloPaginaPadrao(
+    titulo: String,
+    aoVoltar: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        if (aoVoltar != null) {
+            // Mantém uma área de toque confortável para voltar.
+            IconButton(
+                onClick = aoVoltar,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics {
+                        contentDescription = "Voltar"
+                    }
+            ) {
+                // Desenha uma seta visível, sem depender do tamanho de uma letra.
+                Canvas(Modifier.size(28.dp)) {
+                    val espessura = 2.5.dp.toPx()
+                    val ponta = Offset(
+                        size.width * 0.20f,
+                        size.height * 0.50f
+                    )
+
+                    // Haste horizontal da seta.
+                    drawLine(
+                        color = MarromPadraoApp,
+                        start = ponta,
+                        end = Offset(
+                            size.width * 0.85f,
+                            size.height * 0.50f
+                        ),
+                        strokeWidth = espessura,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+
+                    // Parte superior da ponta.
+                    drawLine(
+                        color = MarromPadraoApp,
+                        start = ponta,
+                        end = Offset(
+                            size.width * 0.50f,
+                            size.height * 0.20f
+                        ),
+                        strokeWidth = espessura,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+
+                    // Parte inferior da ponta.
+                    drawLine(
+                        color = MarromPadraoApp,
+                        start = ponta,
+                        end = Offset(
+                            size.width * 0.50f,
+                            size.height * 0.80f
+                        ),
+                        strokeWidth = espessura,
+                        cap = androidx.compose.ui.graphics.StrokeCap.Round
+                    )
+                }
+            }
+
+            Spacer(Modifier.width(8.dp))
         }
-        Text(titulo, Modifier.weight(1f), fontSize = 24.sp, lineHeight = 29.sp,
-            fontWeight = FontWeight.Bold, color = TextoPadraoApp)
+
+        // Alinha o título ao centro vertical do botão.
+        Text(
+            text = titulo,
+            modifier = Modifier.weight(1f),
+            fontSize = 24.sp,
+            lineHeight = 29.sp,
+            fontWeight = FontWeight.Bold,
+            color = TextoPadraoApp
+        )
     }
 }
 
@@ -177,4 +275,39 @@ fun protegerRascunhoNoCabecalho(alterado: Boolean): (() -> Unit) -> Unit {
         }) { Text("Descartar e sair") } },
         dismissButton = { TextButton(onClick = { acaoPendente = null }) { Text("Continuar editando") } }, containerColor = FundoPadraoApp)
     return { acao -> if (alterado) acaoPendente = acao else acao() }
+}
+
+// Mostra o cabeçalho e a estrutura compartilhada das telas.
+// A saudação fica oculta para representar as telas internas.
+@Preview(
+    name = "Padrão das telas",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+
+// Mostra a agenda completa, incluindo o cabeçalho padrão.
+// A própria TelaAgenda já contém a estrutura compartilhada.
+@Preview(
+    name = "Agenda com cabeçalho padrão",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaPadraoApp() {
+    MaterialTheme {
+        CompositionLocalProvider(
+            LocalCabecalhoApp provides DadosCabecalhoApp(
+                nome = "Helena",
+                mostrarSaudacao = false
+            )
+        ) {
+            TelaAgenda(
+                aoInicio = {},
+                aoAnimais = {},
+                aoAdicionar = {}
+            )
+        }
+    }
 }

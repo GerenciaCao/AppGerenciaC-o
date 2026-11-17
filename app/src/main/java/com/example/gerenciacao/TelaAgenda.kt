@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.sp
 import java.util.GregorianCalendar
 import java.util.Calendar
 
+// Habilita a prévia no Android Studio.
+import androidx.compose.ui.tooling.preview.Preview
+
 // Define as cores da agenda seguindo a referência.
 private val FundoAgenda = Color(0xFFFFFCF7)
 private val TextoAgenda = Color(0xFF38291F)
@@ -70,16 +73,12 @@ fun TelaAgenda(
     Column(
         Modifier.fillMaxSize().background(FundoAgenda)
     ) {
-        // Mantém a faixa laranja presente nas outras telas.
-        Box(
-            Modifier.fillMaxWidth()
-                .height(4.dp)
-                .background(AmareloAgenda)
-        )
-
-        Scaffold(
-            modifier = Modifier.weight(1f).statusBarsPadding(),
+        // Reutiliza o cabeçalho laranja com avatar e menu de três pontos.
+        MolduraPadraoApp(
+            modifier = Modifier.weight(1f),
             containerColor = FundoAgenda,
+            // Preserva a agenda atual sem acrescentar um botão flutuante.
+            floatingActionButton = {},
             bottomBar = {
                 MenuInferiorInicio(
                     avisar = { aviso = it },
@@ -98,37 +97,7 @@ fun TelaAgenda(
                     .padding(horizontal = 22.dp)
                     .padding(top = 12.dp, bottom = 24.dp)
             ) {
-                // Cabeçalho com o logotipo e as notificações.
-                Row(
-                    Modifier.fillMaxWidth().height(60.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        painterResource(R.drawable.tipografialogin),
-                        contentDescription = "GerenciaCÃO",
-                        modifier = Modifier.width(132.dp).height(56.dp),
-                        contentScale = ContentScale.Fit
-                    )
 
-                    IconButton(
-                        onClick = {
-                            aviso = "Nenhuma nova notificação."
-                        }
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.inicio_sino),
-                            contentDescription = "Notificações",
-                            tint = MarromAgenda,
-                            modifier = Modifier
-                                .background(CremeAgenda, CircleShape)
-                                .padding(8.dp)
-                                .size(20.dp)
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
 
                 Text(
                     "Agenda",
@@ -284,7 +253,7 @@ fun TelaAgenda(
                     CompromissoAgenda(
                         titulo = "Vacina da Lua",
                         descricao = "7 nov. · 14h00 · Cuidados",
-                        icone = R.drawable.inicio_calendario,
+                        icone = R.drawable.pet2,
                         fundoIcone = CremeAgenda
                     ) {
                         aviso = "Vacina da Lua\n7 de novembro, às 14h.\nCompromisso de exemplo."
@@ -295,7 +264,7 @@ fun TelaAgenda(
                     CompromissoAgenda(
                         titulo = "Visita ao Bento",
                         descricao = "7 nov. · 16h00 · Adoção",
-                        icone = R.drawable.inicio_coracao,
+                        icone = R.drawable.pet1,
                         fundoIcone = Color(0xFFE1F3E8)
                     ) {
                         aviso = "Visita ao Bento\n7 de novembro, às 16h.\nCompromisso de exemplo."
@@ -358,11 +327,13 @@ private fun CompromissoAgenda(
                     .background(fundoIcone, RoundedCornerShape(14.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painterResource(icone),
-                    contentDescription = null,
-                    modifier = Modifier.size(23.dp),
-                    tint = MarromAgenda
+                // Mostra a foto do animal correspondente ao compromisso.
+// Image mantém as cores originais da foto.
+                Image(
+                    painter = painterResource(icone),
+                    contentDescription = titulo,
+                    modifier = Modifier.size(46.dp),
+                    contentScale = ContentScale.Crop
                 )
             }
 
@@ -394,5 +365,24 @@ private fun CompromissoAgenda(
                 tint = MarromAgenda
             )
         }
+    }
+}
+
+// Mostra a agenda na prévia sem executar o aplicativo.
+// As ações ficam vazias porque não é necessário navegar na prévia.
+@Preview(
+    name = "Agenda",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaAgenda() {
+    MaterialTheme {
+        TelaAgenda(
+            aoInicio = {},
+            aoAnimais = {},
+            aoAdicionar = {}
+        )
     }
 }

@@ -10,6 +10,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.shadow
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -31,6 +32,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+// Detecta a prévia para evitar conteúdo transparente no editor.
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.painterResource
@@ -85,11 +88,19 @@ fun TelaInicio(
     // O botao Voltar usa a mesma confirmacao da opcao Sair, evitando saida acidental.
     BackHandler { confirmarSaida = true }
 
-    // Atualiza a referencia de horario para que compromissos passados deixem o destaque.
-    val instante by produceState(System.currentTimeMillis()) {
-        while (true) {
-            value = System.currentTimeMillis()
-            delay(60_000)
+    // A prévia mostra a tela pronta, sem executar atualizações contínuas.
+    val modoPrevia = LocalInspectionMode.current
+
+    // Mantém o horário atualizado no aplicativo, mas não inicia o loop no editor.
+    val instante by produceState(
+        initialValue = System.currentTimeMillis(),
+        key1 = modoPrevia
+    ) {
+        if (!modoPrevia) {
+            while (true) {
+                value = System.currentTimeMillis()
+                delay(60_000)
+            }
         }
     }
     val hoje = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT).format(Date(instante))
@@ -100,14 +111,19 @@ fun TelaInicio(
         .minByOrNull { chaveDataAbrigo(it.data) + it.horario }
 
     // Animacao curta de entrada; o Compose respeita a escala de animacoes do Android.
-    var conteudoVisivel by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { conteudoVisivel = true }
+    // Começa visível na prévia; preserva a animação de entrada no aplicativo.
+    var conteudoVisivel by remember(modoPrevia) { mutableStateOf(modoPrevia) }
+    LaunchedEffect(modoPrevia) {
+        if (!modoPrevia) conteudoVisivel = true
+    }
     val entrada by animateFloatAsState(if (conteudoVisivel) 1f else 0f,
         animationSpec = tween(280), label = "entradaInicio")
 
     // A home e as outras telas internas agora usam a mesma moldura e o mesmo cabecalho.
     val topoAtual = LocalCabecalhoApp.current
     CompositionLocalProvider(LocalCabecalhoApp provides topoAtual.copy(
+        // A saudação permanece visível no Início, inclusive em prévias.
+        mostrarSaudacao = true,
         nome = nomePessoa, categoria = categoriaPessoa, foto = fotoPerfil,
         aoPerfil = aoAbrirPerfil, aoParcerias = { abrirParcerias() }, aoSair = aoSair,
         aoNotificacoes = aoNotificacoes ?: topoAtual.aoNotificacoes
@@ -127,8 +143,9 @@ fun TelaInicio(
             }
         ) { espacos ->
             Column(Modifier.fillMaxSize().padding(espacos).graphicsLayer {
-                alpha = entrada
-                translationY = (1f - entrada) * 12.dp.toPx()
+                // Não depende do relógio de animação do editor para mostrar a tela.
+                alpha = if (modoPrevia) 1f else entrada
+                translationY = if (modoPrevia) 0f else (1f - entrada) * 12.dp.toPx()
             }.verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)) {
                 BannerPedigreeInicio(imagemParceria)
@@ -294,20 +311,22 @@ fun MenuInferiorInicio(
     aoAdicionar: () -> Unit,
     aoAgenda: () -> Unit
 ) {
-    // Reutiliza os destinos compartilhados que já estão ligados no aplicativo.
+    // Preserva os destinos que já estão conectados ao aplicativo.
     val abrirFinancas = LocalAbrirFinancas.current
     val abrirLoja = LocalAbrirLoja.current
 
-    // Desenha somente a barra de navegação e a área dos gestos do Android.
-    Surface(color = Color.White, border = BorderStroke(1.dp, BordaInicio)) {
+    // Mantém a barra branca e reta, como no print enviado.
+    // Somente o item selecionado recebe a cápsula marrom.
+    Surface(
+        color = Color.White,
+        border = BorderStroke(1.dp, BordaInicio)
+    ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
                 .navigationBarsPadding()
                 .padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Todos os itens recebem a mesma largura e o mesmo alinhamento.
             ItemMenuInicio(
                 "Início", R.drawable.inicio_inicio,
                 selecionado == "Início", Modifier.weight(1f), aoInicio
@@ -332,7 +351,7 @@ fun MenuInferiorInicio(
     }
 }
 
-// Mostra o botão mais no espaço flutuante do Scaffold, com descrição acessível.
+// Mantém o botão mais independente da barra de navegação.
 @Composable
 fun BotaoAdicionarFlutuante(aoAdicionar: () -> Unit) {
     FloatingActionButton(
@@ -348,40 +367,127 @@ fun BotaoAdicionarFlutuante(aoAdicionar: () -> Unit) {
 
 // Anima a selecao do menu e mantem os mesmos destinos e rotulos.
 @Composable
-private fun ItemMenuInicio(titulo: String, icone: Int, selecionado: Boolean, modifier: Modifier, aoClicar: () -> Unit) {
+private fun ItemMenuInicio(
+    titulo: String,
+    icone: Int,
+    selecionado: Boolean,
+    modifier: Modifier,
+    aoClicar: () -> Unit
+) {
+    // Detecta o toque para dar uma resposta visual suave.
     val interacao = remember { MutableInteractionSource() }
     val pressionado by interacao.collectIsPressedAsState()
-    val corFundo by animateColorAsState(if (selecionado) CremeInicio else Color.Transparent, tween(160), label = "fundoMenu")
-    val escala by animateFloatAsState(if (pressionado) 0.95f else 1f, spring(stiffness = 600f), label = "escalaMenu")
-    Column(modifier.padding(horizontal = 2.dp).graphicsLayer { scaleX = escala; scaleY = escala }
-        .clip(RoundedCornerShape(17.dp)).background(corFundo)
-        .clickable(interactionSource = interacao, indication = null, onClick = aoClicar)
-        .heightIn(min = 52.dp).padding(vertical = 7.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        val cor = if (selecionado) MarromInicio else Color(0xFF7E7066)
-        IconeInicio(icone, null, 21, cor)
+    val modoPrevia = LocalInspectionMode.current
+    val marromSelecionado = Color(0xFF493020)
+
+    // Faz a cápsula mudar gradualmente entre transparente e marrom.
+    val fundoAnimado by animateColorAsState(
+        targetValue = if (selecionado) marromSelecionado else Color.Transparent,
+        animationSpec = tween(durationMillis = 220),
+        label = "fundoItemNavegacao"
+    )
+
+    // Ícone e texto ficam claros sobre o marrom e escuros sobre o branco.
+    val conteudoAnimado by animateColorAsState(
+        targetValue = if (selecionado) Color(0xFFFFFCF7) else Color(0xFF706359),
+        animationSpec = tween(durationMillis = 180),
+        label = "corItemNavegacao"
+    )
+
+    // A leve compressão responde ao toque e retorna com uma mola suave.
+    val escalaAnimada by animateFloatAsState(
+        targetValue = if (pressionado) 0.94f else 1f,
+        animationSpec = spring(
+            dampingRatio = 0.85f,
+            stiffness = 500f
+        ),
+        label = "toqueItemNavegacao"
+    )
+
+    // A prévia mostra o resultado final sem depender do relógio de animação.
+    val fundo = if (modoPrevia) {
+        if (selecionado) marromSelecionado else Color.Transparent
+    } else fundoAnimado
+    val corConteudo = if (modoPrevia) {
+        if (selecionado) Color(0xFFFFFCF7) else Color(0xFF706359)
+    } else conteudoAnimado
+
+    Column(
+        modifier = modifier
+            .padding(horizontal = 2.dp)
+            .graphicsLayer {
+                scaleX = if (modoPrevia) 1f else escalaAnimada
+                scaleY = if (modoPrevia) 1f else escalaAnimada
+            }
+            .clip(RoundedCornerShape(17.dp))
+            .background(fundo)
+            // Usa a seleção como estado acessível, inclusive para leitores de tela.
+            .selectable(
+                selected = selecionado,
+                interactionSource = interacao,
+                indication = androidx.compose.foundation.LocalIndication.current,
+                role = androidx.compose.ui.semantics.Role.Tab,
+                onClick = aoClicar
+            )
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 2.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            painter = painterResource(icone),
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            tint = corConteudo
+        )
         Spacer(Modifier.height(4.dp))
-        Text(titulo, fontSize = 11.sp, lineHeight = 14.sp, color = cor,
-            fontWeight = if (selecionado) FontWeight.Bold else FontWeight.Normal)
+        Text(
+            text = titulo,
+            fontSize = 11.sp,
+            lineHeight = 14.sp,
+            fontWeight = if (selecionado) FontWeight.Bold else FontWeight.Normal,
+            color = corConteudo
+        )
     }
 }
 
-// Mostra a composicao com o cachorro do banner no tamanho habitual de um celular.
-@Preview(name = "Inicio · 360 dp", showBackground = true, widthDp = 360, heightDp = 800)
+// Mostra a tela inteira com o item Início selecionado em marrom.
+@Preview(
+    name = "Início — celular",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
 @Composable
 private fun PreviewInicioRefinado() {
     MaterialTheme {
-        TelaInicio(aoSair = {}, aoAbrirAnimais = {}, aoNovaFicha = {}, aoAdicionar = {},
-            imagemParceria = R.drawable.pedigree)
+        TelaInicio(
+            aoSair = {},
+            aoAbrirAnimais = {},
+            aoNovaFicha = {},
+            aoAdicionar = {},
+            imagemParceria = R.drawable.pedigree
+        )
     }
 }
 
-// Permite conferir que fontes ampliadas continuam legiveis em uma tela estreita.
-@Preview(name = "Inicio · fonte ampliada", showBackground = true, widthDp = 320, heightDp = 800, fontScale = 1.3f)
+// Prévia adicional para conferir textos maiores sem alterar o aplicativo.
+@Preview(
+    name = "Início — fonte ampliada",
+    showBackground = true,
+    widthDp = 360,
+    heightDp = 800,
+    fontScale = 1.3f
+)
 @Composable
 private fun PreviewInicioRefinadoFonteMaior() {
     MaterialTheme {
-        TelaInicio(aoSair = {}, aoAbrirAnimais = {}, aoNovaFicha = {}, aoAdicionar = {},
-            imagemParceria = R.drawable.pedigree)
+        TelaInicio(
+            aoSair = {},
+            aoAbrirAnimais = {},
+            aoNovaFicha = {},
+            aoAdicionar = {},
+            imagemParceria = R.drawable.pedigree
+        )
     }
 }

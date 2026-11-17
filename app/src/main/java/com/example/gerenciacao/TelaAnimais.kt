@@ -1,9 +1,12 @@
 package com.example.gerenciacao
 
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,25 +19,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
-
-// Abre e reduz a imagem escolhida na ficha para usá-la como miniatura.
-import android.graphics.BitmapFactory
-import android.net.Uri
-import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-// Representa as informacoes de uma ficha de exemplo, sem depender de banco de dados.
+// Guarda os dados de cada animal.
 data class AnimalExemplo(
     val nome: String,
     val idade: String,
@@ -45,22 +45,40 @@ data class AnimalExemplo(
     val fotoUri: String? = null,
     val id: String = java.util.UUID.randomUUID().toString(),
     val sobre: String = "",
-    // Guarda o texto informado na edicao e a situacao de arquivamento local.
     val historicoMedico: String = "",
-    val arquivado: Boolean = false
+    val arquivado: Boolean = false,
+    val especie: String = "Não informada"
 ) : java.io.Serializable
 
-// Preserva os quatro animais e as situacoes apresentados na referencia enviada.
+// Mantém os animais de exemplo do projeto.
 val AnimaisExemplo = listOf(
-    AnimalExemplo("Lua", "2 anos", "Em adoção", raca = "SRD", sexo = "Fêmea", castrado = true, sobre = "Carinhosa, brincalhona e gosta de companhia."),
-    AnimalExemplo("Bento", "5 anos", "No abrigo"),
-    AnimalExemplo("Mel", "1 ano", "Visita marcada"),
-    AnimalExemplo("Tico", "3 anos", "No abrigo")
+    AnimalExemplo(
+        nome = "Lua",
+        idade = "2 anos",
+        situacao = "Disponível",
+        raca = "SRD",
+        sexo = "Fêmea",
+        castrado = true,
+        sobre = "Carinhosa, brincalhona e gosta de companhia."
+    ),
+    AnimalExemplo(
+        nome = "Bento",
+        idade = "5 anos",
+        situacao = "Disponível"
+    ),
+    AnimalExemplo(
+        nome = "Mel",
+        idade = "1 ano",
+        situacao = "Visita marcada"
+    ),
+    AnimalExemplo(
+        nome = "Tico",
+        idade = "3 anos",
+        situacao = "Adotado"
+    )
 )
 
-// Define a mesma identidade visual utilizada no inicio do aplicativo.
-// Usa o laranja da tela Início somente na faixa superior.
-private val LaranjaCabecalhoAnimais = Color(0xFFFFB347)
+// Define as cores da tela.
 private val FundoAnimais = Color(0xFFFFFCF7)
 private val TextoAnimais = Color(0xFF38291F)
 private val MarromAnimais = Color(0xFF783E19)
@@ -68,133 +86,388 @@ private val CremeAnimais = Color(0xFFFFEFC5)
 private val AmareloAnimais = Color(0xFFFFB414)
 private val BordaAnimais = Color(0xFFEADFD2)
 
-// Exibe a lista com pesquisa e filtros locais, mantendo o menu inferior fixo.
+// Mostra os animais e mantém a navegação do projeto.
 @Composable
-fun TelaAnimais(aoVoltarInicio: () -> Unit, animais: List<AnimalExemplo>, aoAdicionar: () -> Unit, aoAbrirFicha: (String) -> Unit, aoAgenda: () -> Unit, aoAdocoes: () -> Unit) {
-    // Mantem a busca e o filtro ao girar o dispositivo.
+fun TelaAnimais(
+    aoVoltarInicio: () -> Unit,
+    animais: List<AnimalExemplo>,
+    aoAdicionar: () -> Unit,
+    aoAbrirFicha: (String) -> Unit,
+    aoAgenda: () -> Unit,
+    aoAdocoes: () -> Unit
+) {
+    // Guarda a pesquisa e os dois filtros separadamente.
     var busca by rememberSaveable { mutableStateOf("") }
     var filtro by rememberSaveable { mutableStateOf("Todos") }
+    var filtroSituacao by rememberSaveable { mutableStateOf("Todas") }
+    var mostrarMenuFiltro by remember { mutableStateOf(false) }
+
     val avisos = remember { SnackbarHostState() }
     val escopo = rememberCoroutineScope()
+
     val avisar: (String) -> Unit = { mensagem ->
         escopo.launch {
             avisos.currentSnackbarData?.dismiss()
             avisos.showSnackbar(mensagem)
         }
     }
+
     BackHandler(onBack = aoVoltarInicio)
 
-    // Combina os dois criterios e calcula o contador com base nos resultados reais.
+    // Combina pesquisa, espécie e disponibilidade.
     val animaisVisiveis = animais.filter { animal ->
-        !animal.arquivado && animal.nome.contains(busca.trim(), ignoreCase = true) && when (filtro) {
-            "Em adoção" -> animal.situacao == "Em adoção"
-            "Adotados" -> animal.situacao == "Adotado"
-            else -> true
-        }
+        !animal.arquivado &&
+                animal.nome.contains(busca.trim(), ignoreCase = true) &&
+                (
+                        filtro == "Todos" ||
+                                animal.especie.equals(filtro, ignoreCase = true)
+                        ) &&
+                (
+                        filtroSituacao == "Todas" ||
+                                animal.situacao.equals(
+                                    filtroSituacao,
+                                    ignoreCase = true
+                                )
+                        )
     }
 
-    Column(Modifier.fillMaxSize().background(FundoAnimais)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(FundoAnimais)
+    ) {
         MolduraPadraoApp(
             modifier = Modifier.weight(1f),
             containerColor = FundoPadraoApp,
-            // Mantém o cabeçalho laranja visível enquanto a lista rola.
-            // O espaço da barra de status recebe a mesma cor da faixa superior.
-
-            snackbarHost = { SnackbarHost(avisos) },
+            snackbarHost = {
+                SnackbarHost(avisos)
+            },
             bottomBar = {
-                MenuInferiorInicio(avisar, selecionado = "Animais", aoInicio = aoVoltarInicio, aoAnimais = {}, aoAdicionar = aoAdicionar, aoAgenda = aoAgenda)
+                MenuInferiorInicio(
+                    avisar,
+                    selecionado = "Animais",
+                    aoInicio = aoVoltarInicio,
+                    aoAnimais = {},
+                    aoAdicionar = aoAdicionar,
+                    aoAgenda = aoAgenda
+                )
             }
         ) { espacos ->
-            // A lista pode rolar sem esconder os controles de navegacao.
             LazyColumn(
-                modifier = Modifier// Arredonda o topo do conteúdo sobre o fundo laranja, igual à tela Início.
+                modifier = Modifier
                     .fillMaxSize()
                     .padding(espacos)
-
                     .background(FundoAnimais)
                     .imePadding(),
-                contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 22.dp, bottom = 28.dp),
+                contentPadding = PaddingValues(
+                    start = 22.dp,
+                    end = 22.dp,
+                    top = 22.dp,
+                    bottom = 28.dp
+                ),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    // Abre o painel de adocoes sem mudar os filtros da lista de bichinhos.
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("Bichinhos", modifier = Modifier.weight(1f), fontSize = 24.sp, lineHeight = 29.sp,
-                            fontWeight = FontWeight.Bold, color = TextoAnimais)
-                        TextButton(onClick = aoAdocoes) {
-                            Text("Adoções", color = MarromAnimais, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(Modifier.height(24.dp))
-
-                    // Pesquisa por nome sem distinguir letras maiusculas de minusculas.
-                    OutlinedTextField(
-                        value = busca, onValueChange = { busca = it }, singleLine = true,
+                    // Mostra o título e o acesso às adoções.
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = { Text("Buscar pelo nome", fontSize = 14.sp, color = Color(0xFF7E7066)) },
-                        leadingIcon = { Icon(painterResource(R.drawable.inicio_busca), "Buscar pelo nome",
-                            Modifier.size(20.dp), tint = Color(0xFF7E7066)) },
-                        shape = RoundedCornerShape(18.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AmareloAnimais, unfocusedBorderColor = BordaAnimais,
-                            focusedContainerColor = Color.White, unfocusedContainerColor = Color.White,
-                            focusedTextColor = TextoAnimais, unfocusedTextColor = TextoAnimais,
-                            cursorColor = MarromAnimais)
-                    )
-                    Spacer(Modifier.height(8.dp))
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Animais",
+                            modifier = Modifier.weight(1f),
+                            fontSize = 30.sp,
+                            lineHeight = 34.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextoAnimais
+                        )
 
-                    // Os filtros mostram apenas as fichas que correspondem a situacao escolhida.
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf("Todos", "Em adoção", "Adotados").forEach { opcao ->
-                            FilterChip(
-                                selected = filtro == opcao, onClick = { filtro = opcao },
-                                label = { Text(opcao, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold) },
-                                shape = CircleShape, border = null,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = AmareloAnimais, selectedLabelColor = MarromAnimais,
-                                    containerColor = if (opcao == "Adotados") Color(0xFFE1F3E8) else CremeAnimais,
-                                    labelColor = MarromAnimais)
+                        TextButton(onClick = aoAdocoes) {
+                            Text(
+                                text = "Adoções",
+                                color = MarromAnimais,
+                                fontWeight = FontWeight.Bold
                             )
                         }
                     }
+
+                    Spacer(Modifier.height(24.dp))
+
+                    // Pesquisa pelo nome e abre o filtro de disponibilidade.
+                    OutlinedTextField(
+                        value = busca,
+                        onValueChange = { busca = it },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = {
+                            Text(
+                                text = "Buscar por ficha",
+                                fontSize = 14.sp,
+                                color = Color(0xFF7E7066)
+                            )
+                        },
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(
+                                    R.drawable.inicio_busca
+                                ),
+                                contentDescription = "Buscar pelo nome",
+                                modifier = Modifier.size(20.dp),
+                                tint = MarromAnimais
+                            )
+                        },
+                        trailingIcon = {
+                            Box {
+                                FilledIconButton(
+                                    onClick = {
+                                        mostrarMenuFiltro = true
+                                    },
+                                    modifier = Modifier.size(38.dp),
+                                    shape = CircleShape,
+                                    colors = IconButtonDefaults
+                                        .filledIconButtonColors(
+                                            containerColor = MarromAnimais
+                                        )
+                                ) {
+                                    // Desenha o ícone com três linhas.
+                                    Canvas(Modifier.size(18.dp)) {
+                                        val cor = Color(0xFFFFD993)
+                                        val espessura = 1.5.dp.toPx()
+
+                                        drawLine(
+                                            color = cor,
+                                            start = Offset(
+                                                size.width * 0.10f,
+                                                size.height * 0.25f
+                                            ),
+                                            end = Offset(
+                                                size.width * 0.90f,
+                                                size.height * 0.25f
+                                            ),
+                                            strokeWidth = espessura
+                                        )
+
+                                        drawLine(
+                                            color = cor,
+                                            start = Offset(
+                                                size.width * 0.25f,
+                                                size.height * 0.50f
+                                            ),
+                                            end = Offset(
+                                                size.width * 0.75f,
+                                                size.height * 0.50f
+                                            ),
+                                            strokeWidth = espessura
+                                        )
+
+                                        drawLine(
+                                            color = cor,
+                                            start = Offset(
+                                                size.width * 0.40f,
+                                                size.height * 0.75f
+                                            ),
+                                            end = Offset(
+                                                size.width * 0.60f,
+                                                size.height * 0.75f
+                                            ),
+                                            strokeWidth = espessura
+                                        )
+                                    }
+                                }
+
+                                // Altera somente o filtro de disponibilidade.
+                                DropdownMenu(
+                                    expanded = mostrarMenuFiltro,
+                                    onDismissRequest = {
+                                        mostrarMenuFiltro = false
+                                    }
+                                ) {
+                                    listOf(
+                                        "Todas",
+                                        "Disponível",
+                                        "Visita marcada",
+                                        "Em tratamento",
+                                        "Adotado"
+                                    ).forEach { opcao ->
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = if (
+                                                        filtroSituacao == opcao
+                                                    ) {
+                                                        "✓ $opcao"
+                                                    } else {
+                                                        opcao
+                                                    }
+                                                )
+                                            },
+                                            onClick = {
+                                                filtroSituacao = opcao
+                                                mostrarMenuFiltro = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(24.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = AmareloAnimais,
+                            unfocusedBorderColor = BordaAnimais,
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.White,
+                            focusedTextColor = TextoAnimais,
+                            unfocusedTextColor = TextoAnimais,
+                            cursorColor = MarromAnimais
+                        )
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Filtro dos animais por espécie: Todos, Cães ou Gatos.
+                    Row(
+                        // Define o espaço entre os botões de filtro.
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Cria um botão para cada opção da lista.
+                        listOf("Todos", "Cães", "Gatos").forEach { opcao ->
+
+                            // Define a foto utilizada em cada botão do filtro de animais.
+                            val fotoFiltro = when (opcao) {
+                                "Cães" -> R.drawable.icondog
+                                "Gatos" -> R.drawable.iconcat
+                                else -> null
+                            }
+
+                            FilterChip(
+                                // Destaca o botão correspondente ao filtro atual.
+                                selected = filtro == opcao,
+
+                                // Atualiza o filtro ao tocar no botão.
+                                // A lista animaisVisiveis usa esse valor para filtrar as fichas.
+                                onClick = { filtro = opcao },
+
+                                // Exibe uma foto provisória somente nos filtros Cães e Gatos.
+                                // O filtro Todos permanece apenas com o texto.
+                                leadingIcon = if (opcao != "Todos") {
+                                    {
+                                        Image(
+                                            // Usa uma imagem que já existe no projeto.
+                                            painter = painterResource(id = fotoFiltro ?: R.drawable.icondog),
+                                            contentDescription = opcao,
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(CircleShape),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                } else {
+                                    null
+                                },
+
+                                // Define o nome e a aparência do texto do botão.
+                                label = {
+                                    Text(
+                                        text = opcao,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                },
+
+                                // Deixa as extremidades do botão arredondadas.
+                                shape = CircleShape,
+
+                                // Remove a borda do botão.
+                                border = null,
+
+                                // Define as cores dos botões selecionados e não selecionados.
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = AmareloAnimais,
+                                    selectedLabelColor = MarromAnimais,
+                                    containerColor = CremeAnimais,
+                                    labelColor = MarromAnimais
+                                )
+                            )
+                        }
+                    }
+
                     Spacer(Modifier.height(18.dp))
 
-                    // O total acompanha a busca e os filtros; a demonstracao possui quatro fichas.
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically) {
-                        Text("Fichas do abrigo", fontSize = 18.sp, lineHeight = 22.sp,
-                            fontWeight = FontWeight.Bold, color = TextoAnimais)
+                    // Atualiza o contador conforme os filtros.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Fichas do abrigo",
+                            fontSize = 18.sp,
+                            lineHeight = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = TextoAnimais
+                        )
+
                         val total = animaisVisiveis.size
-                        Text("$total ${if (total == 1) "ficha" else "fichas"}", fontSize = 12.sp,
-                            lineHeight = 16.sp, fontWeight = FontWeight.Bold, color = MarromAnimais)
+
+                        Text(
+                            text = "$total ${
+                                if (total == 1) "ficha" else "fichas"
+                            }",
+                            fontSize = 12.sp,
+                            lineHeight = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MarromAnimais
+                        )
                     }
+
                     Spacer(Modifier.height(16.dp))
                 }
-                items(animaisVisiveis, key = { it.id }) { animal ->
-                    FichaAnimal(animal, aoAbrir = { aoAbrirFicha(animal.id) })
+
+                // Abre a ficha correspondente ao cartão selecionado.
+                items(
+                    items = animaisVisiveis,
+                    key = { it.id }
+                ) { animal ->
+                    FichaAnimal(
+                        animal = animal,
+                        aoAbrir = { aoAbrirFicha(animal.id) }
+                    )
                 }
-                // Explica o resultado vazio em vez de manter fichas que nao correspondem ao filtro.
+
                 if (animaisVisiveis.isEmpty()) {
                     item {
-                        Text("Nenhum bichinho encontrado.", modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-                            fontSize = 15.sp, color = Color(0xFF7E7066))
+                        Text(
+                            text = "Nenhum bichinho encontrado.",
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 24.dp),
+                            fontSize = 15.sp,
+                            color = Color(0xFF7E7066)
+                        )
                     }
                 }
             }
         }
     }
-
 }
 
-// Renderiza a inicial, o nome, a idade e a situacao no cartao arredondado da referencia.
-// Mostra a foto salva na ficha e mantém a inicial quando não houver imagem disponível.
+// Mostra o cartão com a disponibilidade no canto superior direito.
 @Composable
-private fun FichaAnimal(animal: AnimalExemplo, aoAbrir: () -> Unit) {
-    // Atualiza a miniatura quando o endereço da foto deste animal mudar.
+private fun FichaAnimal(
+    animal: AnimalExemplo,
+    aoAbrir: () -> Unit
+) {
     val foto = lembrarFotoListaAnimal(animal.fotoUri)
 
-    // Mantém o cartão clicável e o mesmo destino da ficha já configurado.
+    val corSituacao = when (animal.situacao) {
+        "Disponível" -> Color(0xFFBCEB83)
+        "Visita marcada" -> Color(0xFFFFDE83)
+        "Em tratamento" -> Color(0xFFFFC48C)
+        "Adotado" -> Color(0xFFFFB0B0)
+        else -> CremeAnimais
+    }
+
     Surface(
         onClick = aoAbrir,
         modifier = Modifier
@@ -206,88 +479,119 @@ private fun FichaAnimal(animal: AnimalExemplo, aoAbrir: () -> Unit) {
     ) {
         Row(
             modifier = Modifier
-                .heightIn(min = 86.dp)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .heightIn(min = 100.dp)
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Recorta somente a miniatura em círculo, preservando o arquivo original.
+            // Mostra a foto salva ou a inicial do nome.
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(55.dp)
                     .clip(CircleShape)
                     .background(CremeAnimais),
                 contentAlignment = Alignment.Center
             ) {
                 if (foto != null) {
-                    // O nome já é lido no cartão; a imagem é decorativa para o leitor de tela.
                     Image(
                         bitmap = foto,
-                        contentDescription = null,
+                        contentDescription = "Foto de ${animal.nome}",
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
                 } else {
-                    // Exibe a inicial durante o carregamento ou quando não houver foto legível.
                     Text(
-                        text = animal.nome.trim().take(1).uppercase().ifBlank { "?" },
+                        text = animal.nome.trim()
+                            .take(1)
+                            .uppercase()
+                            .ifBlank { "?" },
                         fontSize = 24.sp,
-                        lineHeight = 28.sp,
                         fontWeight = FontWeight.Bold,
                         color = MarromAnimais
                     )
                 }
             }
 
-            // Preserva o alinhamento e as informações do cartão existente.
             Spacer(Modifier.width(14.dp))
+
             Column(Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Text(
+                        text = animal.nome,
+                        modifier = Modifier.weight(1f),
+                        fontSize = 18.sp,
+                        lineHeight = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextoAnimais
+                    )
+
+                    Spacer(Modifier.width(8.dp))
+
+                    // Exibe a etiqueta colorida de disponibilidade.
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 140.dp)
+                            .clip(RoundedCornerShape(30.dp))
+                            .background(corSituacao)
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(MarromAnimais)
+                        )
+
+                        Spacer(Modifier.width(4.dp))
+
+                        Text(
+                            text = animal.situacao,
+                            fontSize = 10.sp,
+                            lineHeight = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MarromAnimais
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
                 Text(
-                    text = animal.nome,
-                    fontSize = 18.sp,
-                    lineHeight = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextoAnimais
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "${animal.idade} · ${animal.situacao}",
+                    text = animal.idade,
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
                     color = Color(0xFF7E7066)
                 )
             }
-            Icon(
-                painter = painterResource(R.drawable.inicio_seta),
-                contentDescription = null,
-                modifier = Modifier.size(17.dp),
-                tint = MarromAnimais
-            )
         }
     }
 }
 
-// Carrega uma miniatura local fora da interface, sem depender de uma biblioteca de imagens.
+// Carrega uma miniatura da foto salva no aparelho.
 @Composable
 private fun lembrarFotoListaAnimal(endereco: String?): ImageBitmap? {
     val contexto = LocalContext.current
 
-    // Associa o resultado ao endereço para não mostrar a foto anterior enquanto outra carrega.
     val resultado by produceState<Pair<String?, ImageBitmap?>>(
         initialValue = null to null,
         key1 = endereco,
         key2 = contexto
     ) {
         value = endereco to null
+
         if (!endereco.isNullOrBlank()) {
             val imagem = withContext(Dispatchers.IO) {
                 try {
                     val uri = Uri.parse(endereco)
                     val resolver = contexto.contentResolver
 
-                    // Lê primeiro as dimensões, sem carregar a foto inteira na memória.
                     val limites = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
                     }
+
                     resolver.openInputStream(uri)?.use { entrada ->
                         BitmapFactory.decodeStream(entrada, null, limites)
                     }
@@ -295,32 +599,64 @@ private fun lembrarFotoListaAnimal(endereco: String?): ImageBitmap? {
                     if (limites.outWidth <= 0 || limites.outHeight <= 0) {
                         null
                     } else {
-                        // Reduz a imagem antes de decodificá-la para o pequeno círculo da lista.
                         val opcoes = BitmapFactory.Options().apply {
                             inSampleSize = 1
-                            while (maxOf(limites.outWidth, limites.outHeight) / inSampleSize > 256) {
+
+                            while (
+                                maxOf(
+                                    limites.outWidth,
+                                    limites.outHeight
+                                ) / inSampleSize > 256
+                            ) {
                                 inSampleSize *= 2
                             }
                         }
+
                         resolver.openInputStream(uri)?.use { entrada ->
-                            BitmapFactory.decodeStream(entrada, null, opcoes)?.asImageBitmap()
+                            BitmapFactory.decodeStream(
+                                entrada,
+                                null,
+                                opcoes
+                            )?.asImageBitmap()
                         }
                     }
                 } catch (_: java.io.IOException) {
-                    // Um arquivo removido ou ilegível mantém a inicial no cartão.
                     null
                 } catch (_: SecurityException) {
-                    // Se o Android retirar o acesso à imagem, mantém a inicial.
                     null
                 } catch (_: IllegalArgumentException) {
-                    // Um endereço inválido não impede a abertura da lista.
                     null
                 }
             }
+
             value = endereco to imagem
         }
     }
 
-    // Aceita somente o resultado correspondente à foto atual do animal.
-    return if (resultado.first == endereco) resultado.second else null
+    return if (resultado.first == endereco) {
+        resultado.second
+    } else {
+        null
+    }
+}
+
+// Permite visualizar a tela no Android Studio.
+@Preview(
+    name = "Tela de animais",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaAnimais() {
+    MaterialTheme {
+        TelaAnimais(
+            aoVoltarInicio = {},
+            animais = AnimaisExemplo,
+            aoAdicionar = {},
+            aoAbrirFicha = {},
+            aoAgenda = {},
+            aoAdocoes = {}
+        )
+    }
 }

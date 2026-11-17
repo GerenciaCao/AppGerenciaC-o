@@ -119,6 +119,8 @@ class MainActivity : ComponentActivity() {
                     LocalAbrirLoja provides { pilhaRestante = arrayListOf(); telaAtual = "loja" },
                     LocalCabecalhoApp provides DadosCabecalhoApp(
                         nome = dadosMeuPerfil.nome,
+                        // Mantém a saudação apenas no Início e nas Ações rápidas.
+                        mostrarSaudacao = telaAtual == "inicio" || telaAtual == "adicionar",
                         categoria = "${dadosRestantes.membros.firstOrNull { it.id == dadosRestantes.usuarioLocalId }?.funcao?.titulo ?: dadosMeuPerfil.funcao} · ${dadosRestantes.abrigo.nome}",
                         foto = fotoDaPessoa,
                         aoPerfil = {

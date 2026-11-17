@@ -1,6 +1,8 @@
 package com.example.gerenciacao
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas as AndroidCanvas
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -16,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -23,175 +26,700 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.security.MessageDigest
 
-// Apresenta os dados do animal recebido; a mesma tela atende qualquer ID da lista.
+// Define as cores da ficha individual.
+private val FundoFicha = Color(0xFFFFF8EF)
+private val LaranjaFicha = Color(0xFFFFAD43)
+private val MarromFicha = Color(0xFF493020)
+private val PessegoFicha = Color(0xFFFFDFB8)
+
+// Mostra os dados do animal selecionado na lista.
+// Os campos adicionais têm valores padrão até serem incluídos no cadastro.
 @Composable
 fun TelaFichaAnimal(
     animal: AnimalExemplo,
     aoVoltar: () -> Unit,
     aoInicio: () -> Unit,
-    // Abre a agenda pelo menu compartilhado.
     aoAgenda: () -> Unit,
     aoAdicionar: () -> Unit,
     aoEditar: () -> Unit,
-    aoAcompanharAdocao: () -> Unit
+    aoAcompanharAdocao: () -> Unit,
+    corPelagem: String = "",
+    pesoPorte: String = "",
+    comportamento: String = "",
+    resumoAdocao: String = "",
+    etapasAdocao: List<String> = emptyList()
 ) {
-    // Usa a identidade visual compartilhada pelas telas de animais e cadastro.
-    val fundo = Color(0xFFFFFCF7)
-    val marrom = Color(0xFF783E19)
-    val texto = Color(0xFF38291F)
-    val creme = Color(0xFFFFEFC5)
-    val amarelo = Color(0xFFFFB414)
-    // Mantem a abertura do historico durante a rotacao do dispositivo.
-    var mostrarHistorico by rememberSaveable(animal.id) { mutableStateOf(false) }
+    // Controla os detalhes complementares e o acompanhamento na própria ficha.
+    var detalhesAbertos by rememberSaveable(animal.id) { mutableStateOf(false) }
+    var adocaoAberta by rememberSaveable(animal.id) { mutableStateOf(false) }
+    // Mantém o histórico aberto ao girar o aparelho.
+    var mostrarHistorico by rememberSaveable(animal.id) {
+        mutableStateOf(false)
+    }
+
     val avisos = remember { SnackbarHostState() }
     val escopo = rememberCoroutineScope()
+
     val avisar: (String) -> Unit = { mensagem ->
         escopo.launch {
             avisos.currentSnackbarData?.dismiss()
             avisos.showSnackbar(mensagem)
         }
     }
+
+    // Carrega a foto e gera uma cópia PNG com fundo branco.
+    val foto = lembrarFotoPngFicha(animal.fotoUri)
+
+    // Define a cor da disponibilidade cadastrada.
+    val corSituacao = when (animal.situacao) {
+        "Disponível" -> Color(0xFF96C665)
+        "Visita marcada" -> Color(0xFFFFDE83)
+        "Em tratamento" -> Color(0xFFFFBD83)
+        "Adotado" -> Color(0xFFFFAAAA)
+        else -> Color(0xFFE5DFD5)
+    }
+
+    // Mostra o símbolo correspondente ao sexo informado.
+    val simboloSexo = when (animal.sexo) {
+        "Fêmea" -> "♀"
+        "Macho" -> "♂"
+        else -> ""
+    }
+
+    val corSexo = if (animal.sexo == "Fêmea") {
+        Color(0xFFFF6587)
+    } else {
+        Color(0xFF428ACB)
+    }
+
+    // Converte a informação de castração em um texto legível.
+    val castracao = when (animal.castrado) {
+        true -> if (animal.sexo == "Fêmea") "Castrada" else "Castrado"
+        false -> if (animal.sexo == "Fêmea") {
+            "Não castrada"
+        } else {
+            "Não castrado"
+        }
+        null -> "Não informado"
+    }
+
     BackHandler(onBack = aoVoltar)
 
-    // Abre somente a foto vinculada a esta ficha e reduz imagens grandes antes de exibir.
-    val contexto = LocalContext.current
-    val foto by produceState<ImageBitmap?>(null, animal.id, animal.fotoUri) {
-        value = null
-        animal.fotoUri?.let { endereco ->
-            value = withContext(Dispatchers.IO) {
-                runCatching {
-                    val uri = Uri.parse(endereco)
-                    val limites = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    contexto.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, limites) }
-                    val opcoes = BitmapFactory.Options().apply {
-                        inSampleSize = 1
-                        while (maxOf(limites.outWidth, limites.outHeight) / inSampleSize > 1024) inSampleSize *= 2
-                    }
-                    contexto.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it, null, opcoes)?.asImageBitmap()
-                    }
-                }.getOrNull()
-            }
+    // Mantém a estrutura e o menu inferior já usados no projeto.
+    MolduraPadraoApp(
+        containerColor = FundoFicha,
+        snackbarHost = {
+            SnackbarHost(avisos)
+        },
+        bottomBar = {
+            MenuInferiorInicio(
+                avisar,
+                selecionado = "Animais",
+                aoInicio = aoInicio,
+                aoAnimais = aoVoltar,
+                aoAdicionar = aoAdicionar,
+                aoAgenda = aoAgenda
+            )
         }
-    }
-
-    // Mantem o menu fixo e oferece rolagem para as fichas com textos maiores.
-    Column(Modifier.fillMaxSize().background(fundo)) {
-        // A cor laranja pertence ao cabecalho compartilhado.
-        MolduraPadraoApp(
-            modifier = Modifier.weight(1f), containerColor = fundo,
-            snackbarHost = { SnackbarHost(avisos) },
-            bottomBar = { MenuInferiorInicio(avisar, selecionado = "Animais", aoInicio = aoInicio,
-                aoAnimais = aoVoltar, aoAdicionar = aoAdicionar, aoAgenda = aoAgenda) }
-        ) { espacos ->
-            Column(Modifier.fillMaxSize().padding(espacos).verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)) {
-                // Volta a lista preservando a busca e o filtro usados para abrir o animal.
-                // O cabecalho compartilhado agora apresenta o perfil da pessoa.
-                TituloPaginaPadrao("Ficha do bichinho", aoVoltar)
-                Spacer(Modifier.height(18.dp))
-
-                // Usa a foto do cadastro ou a marca original quando a ficha nao tem imagem.
-                Surface(color = creme, shape = RoundedCornerShape(24.dp)) {
-                    Box(Modifier.fillMaxWidth().height(158.dp), contentAlignment = Alignment.Center) {
-                        val imagem = foto
-                        if (imagem != null) {
-                            Image(imagem, "Foto de ${animal.nome}", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                        } else {
-                            Image(painterResource(R.drawable.logolaranja), "Imagem de ${animal.nome}",
-                                Modifier.size(100.dp), contentScale = ContentScale.Fit)
-                        }
-                    }
+    ) { espacos ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(espacos)
+                .background(FundoFicha)
+                .verticalScroll(rememberScrollState())
+        ) {
+            // Cabeçalho laranja inspirado na ficha do Figma.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(
+                        RoundedCornerShape(
+                            bottomStart = 28.dp,
+                            bottomEnd = 28.dp
+                        )
+                    )
+                    .background(LaranjaFicha)
+                    .padding(18.dp)
+            ) {
+                // Retorna à lista de animais.
+                FilledIconButton(
+                    onClick = aoVoltar,
+                    modifier = Modifier.size(42.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = Color(0xFFFFCE88),
+                        contentColor = MarromFicha
+                    )
+                ) {
+                    Text(
+                        text = "‹",
+                        fontSize = 36.sp,
+                        lineHeight = 36.sp
+                    )
                 }
-                Spacer(Modifier.height(14.dp))
 
-                // O nome e a situacao sao lidos da ficha selecionada, sem valores fixos da Lua.
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(animal.nome, modifier = Modifier.weight(1f), fontSize = 28.sp,
-                        lineHeight = 32.sp, fontWeight = FontWeight.Bold, color = texto)
-                    Box(Modifier.background(if (animal.situacao == "Em adoção") Color(0xFFE1F3E8) else creme, CircleShape)
-                        .padding(horizontal = 20.dp, vertical = 7.dp)) {
-                        Text(animal.situacao, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold, color = marrom)
-                    }
-                }
-                Spacer(Modifier.height(10.dp))
-                val castracao = when (animal.castrado) {
-                    true -> if (animal.sexo == "Fêmea") "Castrada" else "Castrado"
-                    false -> if (animal.sexo == "Fêmea") "Não castrada" else "Não castrado"
-                    null -> "Castração não informada"
-                }
-                Text("${animal.idade} · ${animal.raca} · ${animal.sexo} · $castracao",
-                    fontSize = 12.sp, lineHeight = 18.sp, color = Color(0xFF7E7066))
-                Spacer(Modifier.height(20.dp))
-
-                // Mostra apenas a descricao cadastrada; fichas sem descricao usam uma mensagem neutra.
-                val tituloSobre = when (animal.sexo) {
-                    "Fêmea" -> "Sobre a ${animal.nome}"
-                    "Macho" -> "Sobre o ${animal.nome}"
-                    else -> "Sobre ${animal.nome}"
-                }
-                Text(tituloSobre, fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = texto)
                 Spacer(Modifier.height(12.dp))
-                Text(animal.sobre.ifBlank { "Sem descrição cadastrada." }, fontSize = 14.sp, lineHeight = 20.sp, color = texto)
-                Spacer(Modifier.height(24.dp))
-                Text("Saúde e cuidados", fontSize = 18.sp, lineHeight = 22.sp, fontWeight = FontWeight.Bold, color = texto)
-                Spacer(Modifier.height(14.dp))
 
-                // Abre o historico informado nesta ficha, com estado vazio quando necessario.
-                Surface(onClick = { mostrarHistorico = true },
-                    modifier = Modifier.fillMaxWidth(), color = Color.White, shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Color(0xFFEADFD2))) {
-                    Row(Modifier.heightIn(min = 76.dp).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(44.dp).background(Color(0xFFFFEFE2), RoundedCornerShape(14.dp)),
-                            contentAlignment = Alignment.Center) {
-                            Icon(painterResource(R.drawable.inicio_coracao), null, Modifier.size(23.dp), tint = marrom)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text("Histórico de saúde", fontSize = 16.sp, lineHeight = 20.sp, fontWeight = FontWeight.Bold, color = texto)
-                            Spacer(Modifier.height(5.dp))
-                            Text("Vacinas, consultas e tratamentos", fontSize = 11.sp, lineHeight = 15.sp, color = Color(0xFF7E7066))
-                        }
-                        Icon(painterResource(R.drawable.inicio_seta), null, Modifier.size(15.dp), tint = marrom)
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
-                // Abre o processo vinculado ao ID deste animal.
-                Button(onClick = aoAcompanharAdocao,
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = amarelo, contentColor = texto)) {
-                    Text("Acompanhar adoção", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                }
-                Spacer(Modifier.height(10.dp))
-                // Edita o mesmo registro pelo formulario existente, preservando seu ID.
-                Button(onClick = aoEditar, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = marrom)) {
-                    Text("Editar ficha", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(
+                    text = "Ficha Individual",
+                    fontSize = 28.sp,
+                    lineHeight = 34.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MarromFicha
+                )
+            }
+
+            // Área branca para apresentar a foto sem cortar o animal.
+            // Uma foto com cenário continuará mostrando esse cenário.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(240.dp)
+                    .background(Color.White),
+                contentAlignment = Alignment.Center
+            ) {
+                val imagem = foto
+
+                if (imagem != null) {
+                    Image(
+                        bitmap = imagem,
+                        contentDescription = "Foto de ${animal.nome}",
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(12.dp),
+                        contentScale = ContentScale.Fit
+                    )
+                } else {
+                    // Mantém a logo enquanto não há uma foto disponível.
+                    Image(
+                        painter = painterResource(R.drawable.pet2),
+                        contentDescription = "Animal sem foto cadastrada",
+                        modifier = Modifier.size(330.dp),
+                        contentScale = ContentScale.Fit
+                    )
                 }
             }
+
+            // Cartão principal com borda marrom e fundo creme.
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp),
+                shape = RoundedCornerShape(22.dp),
+                color = FundoFicha,
+                border = BorderStroke(1.5.dp, MarromFicha)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    // Nome e sexo à esquerda; disponibilidade à direita.
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = animal.nome,
+                                modifier = Modifier.weight(
+                                    weight = 1f,
+                                    fill = false
+                                ),
+                                fontSize = 34.sp,
+                                lineHeight = 40.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MarromFicha
+                            )
+
+                            if (simboloSexo.isNotEmpty()) {
+                                Spacer(Modifier.width(6.dp))
+
+                                Text(
+                                    text = simboloSexo,
+                                    fontSize = 32.sp,
+                                    color = corSexo
+                                )
+                            }
+                        }
+
+                        // Identifica a disponibilidade com cor e texto.
+                        Row(
+                            modifier = Modifier
+                                .widthIn(max = 145.dp)
+                                .clip(CircleShape)
+                                .background(corSituacao)
+                                .padding(
+                                    horizontal = 10.dp,
+                                    vertical = 7.dp
+                                ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF36722A))
+                            )
+
+                            Spacer(Modifier.width(6.dp))
+
+                            Text(
+                                text = animal.situacao,
+                                fontSize = 11.sp,
+                                lineHeight = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MarromFicha
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // Mostra primeiro raça, idade e sexo, sem várias caixas abertas.
+                    Text(
+                        text = "${animal.raca} · ${animal.idade} · ${animal.sexo}",
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        color = MarromFicha
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = listOf(pesoPorte, castracao).filter { it.isNotBlank() }.joinToString(" · "),
+                        fontSize = 14.sp,
+                        color = MarromFicha
+                    )
+
+                    // Expande os campos adicionais sem sair da ficha.
+                    TextButton(onClick = { detalhesAbertos = !detalhesAbertos }) {
+                        Text(
+                            if (detalhesAbertos) "Menos informações ⌃" else "Mais informações ⌄",
+                            color = MarromFicha
+                        )
+                    }
+                    if (detalhesAbertos) {
+                        // Organiza as informações principais em quatro colunas.
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            DadoPrincipalFicha(
+                                titulo = "Espécie",
+                                valor = when (animal.especie) {
+                                    "Cães" -> "Cão"
+                                    "Gatos" -> "Gato"
+                                    else -> animal.especie
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            DadoPrincipalFicha(
+                                titulo = "Raça",
+                                valor = animal.raca,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            DadoPrincipalFicha(
+                                titulo = "Idade",
+                                valor = animal.idade,
+                                modifier = Modifier.weight(1f)
+                            )
+
+                            DadoPrincipalFicha(
+                                titulo = "Cor",
+                                valor = corPelagem,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Spacer(Modifier.height(24.dp))
+
+                        // Destaca os dados complementares em faixas pêssego.
+                        FaixaInformacaoFicha(
+                            titulo = "Peso atual / Porte",
+                            valor = pesoPorte
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        FaixaInformacaoFicha(
+                            titulo = "Status reprodutivo",
+                            valor = castracao
+                        )
+
+                        Spacer(Modifier.height(10.dp))
+
+                        FaixaInformacaoFicha(
+                            titulo = "Comportamento",
+                            valor = comportamento
+                        )
+
+                        Spacer(Modifier.height(24.dp))
+
+
+                    }
+                    Text(
+                        text = "Descrição do animal",
+                        fontSize = 22.sp,
+                        lineHeight = 28.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MarromFicha
+                    )
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Exibe a descrição real, sem inventar dados do animal.
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(22.dp),
+                        color = PessegoFicha,
+                        border = BorderStroke(
+                            1.dp,
+                            Color(0xFFE4C8AA)
+                        )
+                    ) {
+                        Text(
+                            maxLines = if (detalhesAbertos) Int.MAX_VALUE else 3,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            text = animal.sobre.ifBlank {
+                                "Sem descrição cadastrada."
+                            },
+                            modifier = Modifier.padding(18.dp),
+                            fontSize = 16.sp,
+                            lineHeight = 23.sp,
+                            color = MarromFicha
+                        )
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // Reúne o acompanhamento na ficha sem exibir todas as etapas de início.
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(18.dp),
+                        color = PessegoFicha
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("Adoção", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, color = MarromFicha)
+                            Spacer(Modifier.height(8.dp))
+                            // Não inventa entrevistas ou interessados: os dados precisam vir da gestão.
+                            Text(
+                                resumoAdocao.ifBlank { "Nenhum acompanhamento informado." },
+                                fontSize = 14.sp, lineHeight = 20.sp, color = MarromFicha
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = { adocaoAberta = !adocaoAberta },
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MarromFicha, contentColor = FundoFicha)
+                            ) {
+                                Text(if (adocaoAberta) "Recolher acompanhamento" else "Acompanhar adoção")
+                            }
+                            if (adocaoAberta) {
+                                // Exibe as etapas reais recebidas como parâmetro, na mesma tela.
+                                Spacer(Modifier.height(12.dp))
+                                if (etapasAdocao.isEmpty()) {
+                                    Text("Nenhuma etapa informada.", color = MarromFicha)
+                                } else {
+                                    etapasAdocao.forEachIndexed { indice, etapa ->
+                                        Text("${indice + 1}. $etapa", Modifier.padding(vertical = 6.dp), color = MarromFicha)
+                                    }
+                                }
+                                // Preserva o acesso às ações de gestão existentes.
+                                TextButton(onClick = aoAcompanharAdocao) {
+                                    Text("Gerenciar adoção", color = MarromFicha)
+                                }
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    // Abre o histórico médico cadastrado para este animal.
+                    OutlinedButton(
+                        onClick = { mostrarHistorico = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = BorderStroke(1.dp, MarromFicha),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MarromFicha
+                        )
+                    ) {
+                        Text("Histórico de saúde")
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // Abre o formulário de edição existente.
+                    TextButton(
+                        onClick = aoEditar,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Editar ficha",
+                            color = MarromFicha,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
         }
     }
 
-    // Mostra somente o texto cadastrado, sem preencher informacoes clinicas ficticias.
-    if (mostrarHistorico) AlertDialog(
-        onDismissRequest = { mostrarHistorico = false },
-        title = { Text("Histórico de ${animal.nome}") },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(animal.historicoMedico.ifBlank { "Nenhum histórico médico cadastrado." })
+    // Mostra o histórico em uma janela sobre a ficha.
+    if (mostrarHistorico) {
+        AlertDialog(
+            onDismissRequest = { mostrarHistorico = false },
+            title = {
+                Text("Histórico de ${animal.nome}")
+            },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(
+                        rememberScrollState()
+                    )
+                ) {
+                    Text(
+                        text = animal.historicoMedico.ifBlank {
+                            "Nenhum histórico médico cadastrado."
+                        }
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { mostrarHistorico = false }
+                ) {
+                    Text("Fechar", color = MarromFicha)
+                }
+            },
+            containerColor = FundoFicha
+        )
+    }
+}
+
+// Apresenta um dos quatro dados principais abaixo do nome.
+@Composable
+private fun DadoPrincipalFicha(
+    titulo: String,
+    valor: String,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = titulo,
+            fontSize = 11.sp,
+            color = MarromFicha
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = valor.ifBlank { "Não informado" },
+            fontSize = 15.sp,
+            lineHeight = 19.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            color = MarromFicha
+        )
+    }
+}
+
+// Cria uma faixa com o nome da informação e seu valor.
+@Composable
+private fun FaixaInformacaoFicha(
+    titulo: String,
+    valor: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = PessegoFicha,
+        shadowElevation = 3.dp
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = 12.dp,
+                vertical = 11.dp
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = titulo,
+                modifier = Modifier.weight(1f),
+                fontSize = 15.sp,
+                lineHeight = 19.sp,
+                fontWeight = FontWeight.Medium,
+                color = MarromFicha
+            )
+
+            Text(
+                text = valor.ifBlank { "Não informado" },
+                modifier = Modifier.weight(1f),
+                fontSize = 12.sp,
+                lineHeight = 17.sp,
+                textAlign = androidx.compose.ui.text.style.TextAlign.End,
+                color = MarromFicha
+            )
+        }
+    }
+}
+
+// Lê a foto, reduz o tamanho e cria uma cópia PNG no cache.
+// O arquivo original enviado pela pessoa permanece preservado.
+// Esta conversão não recorta o animal nem remove o cenário da foto.
+@Composable
+private fun lembrarFotoPngFicha(endereco: String?): ImageBitmap? {
+    val contexto = LocalContext.current
+
+    val resultado by produceState<Pair<String?, ImageBitmap?>>(
+        initialValue = null to null,
+        key1 = endereco,
+        key2 = contexto
+    ) {
+        value = endereco to null
+
+        if (!endereco.isNullOrBlank()) {
+            val imagem = withContext(Dispatchers.IO) {
+                try {
+                    val uri = Uri.parse(endereco)
+                    val resolver = contexto.contentResolver
+
+                    // Lê as dimensões antes de carregar a imagem inteira.
+                    val limites = BitmapFactory.Options().apply {
+                        inJustDecodeBounds = true
+                    }
+
+                    resolver.openInputStream(uri)?.use {
+                        BitmapFactory.decodeStream(it, null, limites)
+                    }
+
+                    if (limites.outWidth <= 0 || limites.outHeight <= 0) {
+                        null
+                    } else {
+                        val opcoes = BitmapFactory.Options().apply {
+                            inSampleSize = 1
+
+                            while (
+                                maxOf(
+                                    limites.outWidth,
+                                    limites.outHeight
+                                ) / inSampleSize > 1600
+                            ) {
+                                inSampleSize *= 2
+                            }
+                        }
+
+                        val original = resolver.openInputStream(uri)?.use {
+                            BitmapFactory.decodeStream(it, null, opcoes)
+                        }
+
+                        if (original == null) {
+                            null
+                        } else {
+                            // Preenche de branco as áreas transparentes.
+                            val branca = Bitmap.createBitmap(
+                                original.width,
+                                original.height,
+                                Bitmap.Config.ARGB_8888
+                            )
+
+                            val canvas = AndroidCanvas(branca)
+                            canvas.drawColor(android.graphics.Color.WHITE)
+                            canvas.drawBitmap(original, 0f, 0f, null)
+
+                            // Usa um nome seguro para a cópia temporária PNG.
+                            val chave = MessageDigest
+                                .getInstance("SHA-256")
+                                .digest(endereco.toByteArray())
+                                .joinToString("") {
+                                    "%02x".format(it.toInt() and 0xff)
+                                }
+
+                            val pasta = File(
+                                contexto.cacheDir,
+                                "fotos_animais_png"
+                            )
+
+                            if (!pasta.exists()) {
+                                pasta.mkdirs()
+                            }
+
+                            val arquivo = File(pasta, "$chave.png")
+
+                            // Salva a cópia em PNG sem alterar o cadastro.
+                            try {
+                                arquivo.outputStream().use { saida ->
+                                    branca.compress(
+                                        Bitmap.CompressFormat.PNG,
+                                        100,
+                                        saida
+                                    )
+                                }
+                            } catch (_: java.io.IOException) {
+                                // Ainda permite exibir a foto se o cache falhar.
+                            }
+
+                            branca.asImageBitmap()
+                        }
+                    }
+                } catch (_: java.io.IOException) {
+                    null
+                } catch (_: SecurityException) {
+                    null
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = { mostrarHistorico = false }) { Text("Fechar", color = marrom) }
-        },
-        containerColor = fundo
-    )
+
+            value = endereco to imagem
+        }
+    }
+
+    // Evita mostrar a imagem anterior enquanto outra é carregada.
+    return if (resultado.first == endereco) {
+        resultado.second
+    } else {
+        null
+    }
+}
+
+// Mostra a ficha no painel de prévia do Android Studio.
+@Preview(
+    name = "Ficha Individual",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaFichaAnimal() {
+    MaterialTheme {
+        TelaFichaAnimal(
+            animal = AnimaisExemplo.first(),
+            aoVoltar = {},
+            aoInicio = {},
+            aoAgenda = {},
+            aoAdicionar = {},
+            aoEditar = {},
+            aoAcompanharAdocao = {}
+        )
+    }
 }
