@@ -28,8 +28,12 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-// Usa o laranja do novo inicio e deixa o fundo creme para os resultados.
-private val LaranjaCabecalhoRedes = Color(0xFFFFAE49)
+// Define o azul do cabeçalho de Redes e Conexões.
+private val AzulCabecalhoRedes = Color(0xFF8AC8FC)
+// Define a cor do filtro Todos.
+private val AzulEscuroRedes = Color(0xFF285483)
+// Define a cor do filtro Suas conexões.
+private val MarromEscuroRedes = Color(0xFF493020)
 
 // A lista Todos e a lista Suas conexoes sao dois estados da mesma tela, nao telas duplicadas.
 @Composable
@@ -49,33 +53,129 @@ fun TelaRedesConexoes(ctx: ContextoAbrigo, abrigos: List<AbrigoRede>, conexoes: 
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 TituloPaginaPadrao("Redes e Conexões", ctx.voltar)
-                Spacer(Modifier.height(12.dp))
-                Text("Encontre quem também acolhe", color = TextoRestante, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text("Conheça outros abrigos e organize suas conexões.", fontSize = 13.sp, color = MarromRestante)
-                Spacer(Modifier.height(16.dp))
-                OutlinedTextField(value = busca, onValueChange = { busca = it.take(120) }, modifier = Modifier.fillMaxWidth(),
-                    singleLine = true, label = { Text("Buscar por nome ou cidade", fontSize = 13.sp) },
-                    leadingIcon = { Icon(painterResource(R.drawable.inicio_busca), null, Modifier.size(20.dp), tint = MarromRestante) },
+                // Separa o título da busca, mantendo o respiro das outras telas.
+                Spacer(Modifier.height(24.dp))
+                OutlinedTextField(
+                    // Mostra o texto digitado na busca.
+                    value = busca,
+                    // Atualiza os resultados enquanto o usuário digita.
+                    onValueChange = { busca = it.take(120) },
+                    // Ocupa a largura disponível entre as margens da tela.
+                    modifier = Modifier.fillMaxWidth(),
+                    // Mantém a pesquisa em uma única linha.
+                    singleLine = true,
+                    // Mostra a orientação dentro do campo quando ele está vazio.
+                    placeholder = { Text("Buscar por nome ou cidade") },
+                    // Mantém a lupa na entrada da busca.
+                    leadingIcon = {
+                        Icon(
+                            // Reutiliza o desenho de busca existente.
+                            painter = painterResource(R.drawable.inicio_busca),
+                            // A lupa é decorativa; o campo já informa sua função.
+                            contentDescription = null,
+                            // Mantém a lupa proporcional ao campo.
+                            modifier = Modifier.size(20.dp),
+                            // Usa o marrom da identidade visual.
+                            tint = MarromRestante
+                        )
+                    },
+                    // Coloca o único botão de filtros na extremidade da busca.
                     trailingIcon = {
-                        IconButton(onClick = { filtrosAbertos = true }, modifier = Modifier.semantics { contentDescription = "Abrir filtros de redes" }) {
-                            IconeFiltroRedes()
+                        IconButton(
+                            // Abre o mesmo painel de filtros já existente.
+                            onClick = { filtrosAbertos = true },
+                            // Mantém uma área confortável para tocar no controle.
+                            modifier = Modifier.size(48.dp).semantics {
+                                contentDescription = "Abrir filtros de redes; " +
+                                        quantidadeFiltros + " filtros ativos"
+                            }
+                        ) {
+                            Box(
+                                // Desenha o fundo circular marrom do filtro.
+                                modifier = Modifier.size(36.dp)
+                                    .background(MarromEscuroRedes, androidx.compose.foundation.shape.CircleShape),
+                                // Centraliza os traços dentro do círculo.
+                                contentAlignment = Alignment.Center
+                            ) {
+                                IconeFiltroRedes()
+                            }
                         }
-                    }, shape = RoundedCornerShape(16.dp), colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = LaranjaRestante, unfocusedBorderColor = BordaRestante,
-                        focusedContainerColor = Color.White, unfocusedContainerColor = Color.White))
+                    },
+                    // Mantém a busca arredondada como nas telas de Animais e Loja.
+                    shape = RoundedCornerShape(28.dp),
+                    // Define as cores do campo sem depender do tema padrão.
+                    colors = OutlinedTextFieldDefaults.colors(
+                        // Destaca o campo quando recebe o foco.
+                        focusedBorderColor = MarromRestante,
+                        // Mantém a borda discreta quando o campo não está selecionado.
+                        unfocusedBorderColor = BordaRestante,
+                        // Mantém o fundo branco durante a digitação.
+                        focusedContainerColor = Color.White,
+                        // Mantém o fundo branco sem foco.
+                        unfocusedContainerColor = Color.White,
+                        // Usa o marrom para o cursor.
+                        cursorColor = MarromRestante
+                    )
+                )
+                // Separa a busca dos filtros de conexão.
                 Spacer(Modifier.height(10.dp))
-                FiltrosRestantes(listOf("Todos", "Suas conexões"), aba) { aba = it }
-            }
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${resultados.size} ${if (resultados.size == 1) "abrigo encontrado" else "abrigos encontrados"}",
-                        Modifier.weight(1f), fontSize = 12.sp, color = MarromRestante)
-                    TextButton(onClick = { filtrosAbertos = true }) {
-                        Text(if (quantidadeFiltros == 0) "Filtrar" else "Filtrar ($quantidadeFiltros)", color = MarromRestante)
+                Row(
+                    // Mantém os dois filtros lado a lado.
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf("Todos", "Suas conexões").forEach { opcao ->
+                        // Mantém uma cor própria para cada opção.
+                        val corAba = if (opcao == "Todos") AzulEscuroRedes else MarromEscuroRedes
+                        FilterChip(
+                            // Indica qual lista está sendo exibida.
+                            selected = aba == opcao,
+                            // Alterna entre todos os abrigos e as conexões adicionadas.
+                            onClick = { aba = opcao },
+                            // Mostra o nome da opção.
+                            label = {
+                                Text(
+                                    // Usa o texto do filtro correspondente.
+                                    text = opcao,
+                                    // Destaca a opção selecionada pelo peso da fonte.
+                                    fontWeight = if (aba == opcao) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            // Mantém o formato de cápsula do protótipo.
+                            shape = RoundedCornerShape(24.dp),
+                            // Reforça a borda da opção ativa sem trocar sua cor.
+                            border = BorderStroke(
+                                // Aumenta o contorno da opção selecionada.
+                                width = if (aba == opcao) 2.dp else 1.dp,
+                                // Mantém o contorno na cor do botão.
+                                color = corAba
+                            ),
+                            // Mantém Todos azul-escuro e Suas conexões marrom.
+                            colors = FilterChipDefaults.filterChipColors(
+                                // Define o fundo do botão não selecionado.
+                                containerColor = corAba,
+                                // Mantém o texto legível no fundo escuro.
+                                labelColor = Color.White,
+                                // Preserva a mesma identidade ao selecionar o botão.
+                                selectedContainerColor = corAba,
+                                // Mantém o texto branco na opção selecionada.
+                                selectedLabelColor = Color.White
+                            )
+                        )
                     }
                 }
-                Text("Dados de exemplo · distâncias ilustrativas", fontSize = 11.sp, color = MarromRestante)
+            }
+            item {
+                Text(
+                    // Mostra quantos abrigos correspondem à busca e aos filtros.
+                    text = resultados.size.toString() + " " +
+                            if (resultados.size == 1) "abrigo encontrado" else "abrigos encontrados",
+                    // Ocupa a largura da lista.
+                    modifier = Modifier.fillMaxWidth(),
+                    // Mantém a contagem secundária em relação aos títulos dos abrigos.
+                    fontSize = 12.sp,
+                    // Usa o marrom dos textos auxiliares.
+                    color = MarromRestante
+                )
             }
             items(resultados, key = { it.id }) { abrigo ->
                 CartaoAbrigoRede(abrigo, abrigo.id in conexoes) { aoAbrirAbrigo(abrigo.id) }
@@ -90,7 +190,7 @@ fun TelaRedesConexoes(ctx: ContextoAbrigo, abrigos: List<AbrigoRede>, conexoes: 
                     }) { Text("Limpar busca e filtros", color = MarromRestante) }
                 }
             }
-            item { Text("Esta demonstração não consulta a localização do aparelho.", fontSize = 11.sp, color = MarromRestante) }
+
         }
     }
     // O painel trabalha em um rascunho; cancelar nao muda os filtros aplicados.
@@ -106,7 +206,14 @@ fun TelaRedesConexoes(ctx: ContextoAbrigo, abrigos: List<AbrigoRede>, conexoes: 
 internal fun EstruturaRedes(ctx: ContextoAbrigo, titulo: String, conteudo: @Composable () -> Unit) {
     var aviso by rememberSaveable { mutableStateOf<String?>(null) }
     BackHandler(onBack = ctx.voltar)
-    CompositionLocalProvider(LocalAbrirFinancas provides { ctx.principal("financas") }) {
+    CompositionLocalProvider(
+        // Mantém o destino de Finanças da navegação inferior.
+        LocalAbrirFinancas provides { ctx.principal("financas") },
+        // Usa azul apenas no fluxo de Redes e Conexões.
+        LocalCorCabecalhoApp provides AzulCabecalhoRedes,
+        // Mantém a foto e o menu do usuário, sem repetir a saudação.
+        LocalCabecalhoApp provides LocalCabecalhoApp.current.copy(mostrarSaudacao = false)
+    ) {
         MolduraPadraoApp(
             bottomBar = { MenuInferiorInicio(avisar = { aviso = it }, selecionado = "",
                 aoInicio = { ctx.principal("inicio") }, aoAnimais = { ctx.principal("animais") },
@@ -127,6 +234,20 @@ private fun CartaoAbrigoRede(abrigo: AbrigoRede, conectado: Boolean, abrir: () -
                 Text(abrigo.nome, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextoRestante)
                 Text("${abrigo.bairro} · ${abrigo.cidade}", fontSize = 11.sp, lineHeight = 15.sp, color = MarromRestante)
                 Text(distanciaRede(abrigo), fontSize = 11.sp, color = MarromRestante)
+                Text(
+                    // Mostra a descrição cadastrada para este abrigo.
+                    text = abrigo.descricao,
+                    // Define o tamanho do texto.
+                    fontSize = 12.sp,
+                    // Define o espaço entre as linhas.
+                    lineHeight = 17.sp,
+                    // Limita o resumo a duas linhas.
+                    maxLines = 2,
+                    // Mostra reticências quando a descrição for maior.
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    // Mantém a cor dos textos do cartão.
+                    color = TextoRestante
+                )
                 if (conectado) Text("Sua conexão", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2F7051))
             }
             Spacer(Modifier.width(6.dp))
@@ -145,18 +266,30 @@ internal fun CapaAbrigoRede(abrigo: AbrigoRede, modifier: Modifier) {
     }
 }
 
-// Desenha o controle de filtros sem depender de uma nova biblioteca de icones.
+// Desenha três traços claros sobre o círculo marrom do botão de filtros.
 @Composable
 private fun IconeFiltroRedes() {
-    Canvas(Modifier.size(22.dp)) {
-        listOf(0.25f to 0.35f, 0.5f to 0.7f, 0.75f to 0.45f).forEach { (y, x) ->
-            drawLine(MarromRestante, Offset(0f, size.height * y), Offset(size.width, size.height * y), strokeWidth = 1.6.dp.toPx())
-            drawCircle(FundoRestante, 3.dp.toPx(), Offset(size.width * x, size.height * y))
-            drawCircle(MarromRestante, 2.dp.toPx(), Offset(size.width * x, size.height * y))
+    Canvas(
+        // Define a área ocupada pelo desenho dentro do botão.
+        modifier = Modifier.size(18.dp)
+    ) {
+        // Reduz a largura de cada traço para formar o símbolo de filtro.
+        listOf(0.30f to 0.90f, 0.50f to 0.60f, 0.70f to 0.30f).forEach { (altura, largura) ->
+            drawLine(
+                // Usa creme para contrastar com o fundo marrom.
+                color = Color(0xFFFFEFC5),
+                // Centraliza o início do traço horizontal.
+                start = Offset(size.width * (1f - largura) / 2f, size.height * altura),
+                // Centraliza o final do traço horizontal.
+                end = Offset(size.width * (1f + largura) / 2f, size.height * altura),
+                // Mantém os traços visíveis no tamanho do controle.
+                strokeWidth = 1.6.dp.toPx(),
+                // Suaviza as pontas dos traços.
+                cap = androidx.compose.ui.graphics.StrokeCap.Round
+            )
         }
     }
 }
-
 // Aplica cidade, distancia de exemplo, vagas e ordenacao apenas ao confirmar o painel.
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

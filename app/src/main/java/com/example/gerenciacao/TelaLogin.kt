@@ -26,6 +26,8 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// Habilita a prévia no Android Studio.
+import androidx.compose.ui.tooling.preview.Preview
 
 // Paleta baseada na identidade original do GerenciaCÃO.
 private val Fundo = Color(0xFFFFFCF7)
@@ -144,6 +146,30 @@ fun TelaLogin(
             colors = coresCampo()
         )
 
+         // Mostra o acesso direto somente durante a demonstração.
+         if (MODO_DEMONSTRACAO) {
+            TextButton(
+                // Abre o Início sem validar e-mail ou senha.
+                onClick = aoAcessar
+            ) {
+                Text(
+                    // Identifica o acesso demonstrativo.
+                    text = "Primeiro acesso",
+
+                    // Mantém a cor dos links do login.
+                    color = Marrom,
+
+                    // Define o tamanho da legenda.
+                    fontSize = 15.sp,
+
+                    // Destaca o link.
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+
+             // Mantém uma distância pequena entre os links.
+             Spacer(Modifier.height(3.dp))
+        }
         // Recuperação de senha.
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -497,4 +523,30 @@ private fun avisoLoginSocial(
         "Login com $plataforma ainda não configurado.",
         Toast.LENGTH_SHORT
     ).show()
+}
+
+// Mostra a tela de login sem executar o aplicativo.
+@Preview(
+    // Nome exibido no painel da prévia.
+    name = "Login",
+
+    // Exibe o fundo da tela.
+    showBackground = true,
+
+    // Define a largura do celular de referência.
+    widthDp = 412,
+
+    // Define a altura do celular de referência.
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaLogin() {
+    MaterialTheme {
+        TelaLogin(
+            // Ações vazias permitem visualizar sem navegar.
+            aoAcessar = {},
+            aoAbrirCadastro = {},
+            aoRecuperarSenha = {}
+        )
+    }
 }

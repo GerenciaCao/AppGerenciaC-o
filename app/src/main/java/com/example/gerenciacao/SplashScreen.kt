@@ -45,8 +45,20 @@ class MainActivity : ComponentActivity() {
             MaterialTheme(
                 colorScheme = lightColorScheme()
             ) {
+
+                /* Inicialização original do perfil desativada temporariamente.
+                // Mantenha este bloco comentado enquanto usar criarPerfilDemonstracao.
+                // Na integração com a API, substitua os dados demonstrativos pelo perfil real.
                 // Estado demonstrativo compartilhado entre home e perfil.
-                var dadosMeuPerfil by rememberSaveable { mutableStateOf(DadosMeuPerfil()) }
+                var dadosMeuPerfil by rememberSaveable { mutableStateOf(DadosMeuPerfil()) }*/
+
+                // Obtém o contexto para localizar a foto de demonstração.
+                val contextoPerfil = LocalContext.current
+
+                // Inicia o perfil com a foto demonstrativa e permite editar depois.
+                var dadosMeuPerfil by rememberSaveable {
+                    mutableStateOf(criarPerfilDemonstracao(contextoPerfil))
+                }
                 val fotoDaPessoa = lembrarFotoMeuPerfil(dadosMeuPerfil.fotoUri)
                 var origemPerfil by rememberSaveable { mutableStateOf("inicio") }
 
@@ -56,9 +68,21 @@ class MainActivity : ComponentActivity() {
 
                 // Guarda as fichas da demonstracao durante a sessao e a rotacao da tela.
                 // O Tico ja inicia adotado para combinar com seu processo demonstrativo em acompanhamento.
-                var animais by rememberSaveable {
+
+                // Código antigo desativado: substituído pelos animais com fotos de DadosDemonstracao.kt.
+                // Mantenha este bloco comentado para não declarar a variável animais duas vezes.
+                /*var animais by rememberSaveable {
                     mutableStateOf(ArrayList(AnimaisExemplo.map { if (it.nome == "Tico") it.copy(situacao = "Adotado") else it }))
+                }*/
+
+                // Obtém o contexto para localizar as fotos do drawable deste aplicativo.
+                val contextoDemonstracao = androidx.compose.ui.platform.LocalContext.current
+
+                // Carrega os exemplos uma vez e mantém os cadastros editáveis durante a sessão.
+                var animais by rememberSaveable {
+                    mutableStateOf(criarAnimaisDemonstracao(contextoDemonstracao))
                 }
+
                 // Cria os exemplos uma vez e mantem seus vinculos por ID durante a sessao.
                 var processosAdocao by rememberSaveable {
                     mutableStateOf(criarProcessosAdocaoExemplo(animais))
@@ -80,9 +104,37 @@ class MainActivity : ComponentActivity() {
                 var abrigoRedeSelecionadoId by rememberSaveable { mutableStateOf<String?>(null) }
                 var conexoesRede by rememberSaveable { mutableStateOf(arrayListOf("cantinho-focinhos")) }
 
-                // Dados adicionais ficam apenas no estado local salvo pelo Android.
-                var dadosRestantes by rememberSaveable { mutableStateOf(dadosRestantesExemplo(animais)) }
+                /* Dados adicionais ficam apenas no estado local salvo pelo Android.
+                var dadosRestantes by rememberSaveable { mutableStateOf(dadosRestantesExemplo(animais)) }*/
+
+                // Mantém os dados existentes e acrescenta o compromisso demonstrativo uma única vez.
+                var dadosRestantes by rememberSaveable {
+                    mutableStateOf(
+                        adicionarCompromissoApresentacao(
+                            dados = dadosRestantesExemplo(animais),
+                            animais = animais
+                        )
+                    )
+                }
+
                 var pilhaRestante by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
+                // Acrescenta o exemplo também quando o Android restaura dados de uma execução anterior.
+                // A função verifica o ID antes de inserir, evitando duplicação.
+                LaunchedEffect(MODO_DEMONSTRACAO) {
+                    // Carrega a foto do abrigo definida nos dados de demonstração.
+                    dadosRestantes = adicionarFotoAbrigoDemonstracao(
+                        // Usa o contexto já existente.
+                        contexto = contextoDemonstracao,
+                        // Mantém os dados atuais do aplicativo.
+                        dados = dadosRestantes
+                    )
+                    dadosRestantes = adicionarCompromissoApresentacao(
+                        // Usa os registros atuais, incluindo os que já estavam salvos.
+                        dados = dadosRestantes,
+                        // Relaciona a vacinação à Lua da lista atual.
+                        animais = animais
+                    )
+                }
                 val abrirRestante: (String) -> Unit = { destino ->
                     if (destino != telaAtual) {
                         pilhaRestante = ArrayList(pilhaRestante + telaAtual)
@@ -115,6 +167,16 @@ class MainActivity : ComponentActivity() {
 
                 // Disponibiliza o destino Financas ao menu de todas as telas.
                 CompositionLocalProvider(
+                    // Liga o botão + das telas à página de Ações rápidas.
+                    LocalAdicionarFlutuanteApp provides {
+                        if (telaAtual != "adicionar") {
+                            // Guarda a tela atual para retornar ao apertar Voltar.
+                            origemAdicionar = telaAtual
+
+                            // Abre a página de Ações rápidas.
+                            telaAtual = "adicionar"
+                        }
+                    },
                     LocalAbrirFinancas provides { telaAtual = "financas" },
                     LocalAbrirLoja provides { pilhaRestante = arrayListOf(); telaAtual = "loja" },
                     LocalCabecalhoApp provides DadosCabecalhoApp(
@@ -126,7 +188,8 @@ class MainActivity : ComponentActivity() {
                         aoPerfil = {
                             if (telaAtual != "perfil") { origemPerfil = telaAtual; telaAtual = "perfil" }
                         },
-                        aoParcerias = { if (telaAtual != "parcerias") abrirRestante("parcerias") },
+                        // Direciona o acesso compartilhado para a Loja atual.
+                        aoParcerias = { telaAtual = "loja" },
                         aoSair = { pilhaRestante = arrayListOf(); telaAtual = "login" },
                         aoDescartarRascunho = { estadoLista.removeState(telaAtual) }
                     )
@@ -207,8 +270,16 @@ class MainActivity : ComponentActivity() {
                             aoEncontrarCuidadores = { abrirRestante("redes_conexoes") },
                             // O banner abre a lista de parcerias pela navegacao que ja existe.
                             imagemParceria = R.drawable.pedigree,
-                            aoAbrirParcerias = { abrirRestante("parcerias") },
+                            // Abre a Loja atual pelo banner do Início.
+                            aoAbrirParcerias = { telaAtual = "loja" },
                             compromissos = dadosRestantes.compromissos,
+                            // Seleciona o dia do aviso antes de abrir a agenda.
+                            aoAbrirAgendaNaData = { data ->
+                                // A agenda já lê agendaDataAlvo e seleciona dia, mês e ano.
+                                dadosRestantes = dadosRestantes.copy(agendaDataAlvo = data)
+                                // Abre o calendário com a data enviada pelo Início.
+                                telaAtual = "agenda"
+                            },
                             aoRegistrarDoacao = { abrirRestante("registrar_doacao") },
                             aoRegistrarDespesa = { abrirRestante("registrar_despesa") },
                             // Reflete os dados editados no perfil, sem fixar nome ou foto.
@@ -276,12 +347,32 @@ class MainActivity : ComponentActivity() {
                         }
                         // Resolve sempre o processo e o animal atuais pelo ID.
                         "acompanhar_adocao" -> {
-                            val processo = processosAdocao.firstOrNull { it.id == processoSelecionadoId }
-                            val animal = animais.firstOrNull { it.id == processo?.animalId && !it.arquivado }
-                            if (processo != null && animal != null) {
+                            // Ao vir da ficha, usa o animal selecionado, mesmo sem processo.
+                            val processoPeloId = processosAdocao.firstOrNull {
+                                it.id == processoSelecionadoId
+                            }
+                            val idAnimal = if (origemAcompanhamento == "ficha_animal") {
+                                animalSelecionadoId
+                            } else {
+                                processoPeloId?.animalId
+                            }
+                            val animal = animais.firstOrNull {
+                                it.id == idAnimal && !it.arquivado
+                            }
+                            // Mantém o processo vinculado ao mesmo animal exibido.
+                            val processo = if (origemAcompanhamento == "ficha_animal") {
+                                processosAdocao.firstOrNull { it.animalId == idAnimal }
+                            } else {
+                                processoPeloId?.takeIf { it.animalId == idAnimal }
+                            }
+
+                            if (animal != null) {
                                 TelaAcompanharAdocao(
+                                    // Exibe os dados da ficha escolhida.
                                     animal = animal,
+                                    // Aceita ausência de processo sem bloquear a tela.
                                     processo = processo,
+                                    // Retorna ao lugar de onde o acompanhamento foi aberto.
                                     aoVoltar = { telaAtual = origemAcompanhamento },
                                     aoInicio = { telaAtual = "inicio" },
                                     aoAnimais = { telaAtual = "animais" },
@@ -296,34 +387,38 @@ class MainActivity : ComponentActivity() {
                                         telaAtual = "ficha_animal"
                                     },
                                     aoAlterarEtapa = { etapa ->
-                                        // Modifica apenas este processo; a confirmacao de adocao tem acao propria.
-                                        processosAdocao = ArrayList(processosAdocao.map {
-                                            if (it.id == processo.id) it.copy(etapa = etapa, proximaAcao = proximaAcaoAdocao(etapa)) else it
-                                        })
+                                        // Atualiza somente um processo realmente cadastrado.
+                                        if (processo != null) {
+                                            processosAdocao = ArrayList(processosAdocao.map {
+                                                if (it.id == processo.id) {
+                                                    it.copy(
+                                                        etapa = etapa,
+                                                        proximaAcao = proximaAcaoAdocao(etapa)
+                                                    )
+                                                } else it
+                                            })
+                                        }
                                     },
                                     aoConfirmarAdocao = {
-                                        // Mantem a ficha e o processo coerentes na mesma atualizacao local.
-                                        animais = ArrayList(animais.map {
-                                            if (it.id == animal.id) it.copy(situacao = "Adotado") else it
-                                        })
-                                        processosAdocao = ArrayList(processosAdocao.map {
-                                            if (it.id == processo.id) it.copy(etapa = EtapaAdocao.ACOMPANHAMENTO,
-                                                proximaAcao = proximaAcaoAdocao(EtapaAdocao.ACOMPANHAMENTO)) else it
-                                        })
+                                        // Mantém a ficha e o processo sincronizados.
+                                        if (processo != null) {
+                                            animais = ArrayList(animais.map {
+                                                if (it.id == animal.id) it.copy(situacao = "Adotado") else it
+                                            })
+                                            processosAdocao = ArrayList(processosAdocao.map {
+                                                if (it.id == processo.id) {
+                                                    it.copy(
+                                                        etapa = EtapaAdocao.ACOMPANHAMENTO,
+                                                        proximaAcao = proximaAcaoAdocao(EtapaAdocao.ACOMPANHAMENTO)
+                                                    )
+                                                } else it
+                                            })
+                                        }
                                     }
                                 )
                             } else {
-                                // Nao cria um processo ficticio para animais ainda sem interessado.
-                                androidx.activity.compose.BackHandler { telaAtual = origemAcompanhamento }
-                                Column(Modifier.fillMaxSize().background(Color(0xFFFFFCF7)).statusBarsPadding()
-                                    .navigationBarsPadding().padding(24.dp),
-                                    verticalArrangement = Arrangement.Center,
-                                    horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Nenhum processo de adoção disponível para este bichinho.")
-                                    androidx.compose.material3.TextButton(onClick = { telaAtual = origemAcompanhamento }) {
-                                        Text("Voltar")
-                                    }
-                                }
+                                // Volta à lista se a ficha foi removida ou arquivada.
+                                LaunchedEffect(idAnimal) { telaAtual = "animais" }
                             }
                         }
                         // Usa uma unica tela para qualquer animal escolhido, inclusive novas fichas.
@@ -418,7 +513,8 @@ class MainActivity : ComponentActivity() {
                                 abrirRestante("novo_compromisso")
                             },
                             aoCriarPostagem = { abrirRestante("criar_postagem") },
-                            aoParcerias = { abrirRestante("parcerias") },
+                            // Abre a Loja atual pelo atalho das Ações rápidas.
+                            aoParcerias = { telaAtual = "loja" },
                             aoDivulgacao = { abrirRestante("divulgacao") },
                             // Liga o item Agenda ao calendario.
                             aoAgenda = { telaAtual = "agenda" },
@@ -460,8 +556,15 @@ class MainActivity : ComponentActivity() {
                             dados = dadosMeuPerfil.copy(abrigo = dadosRestantes.abrigo.nome,
                                 funcao = dadosRestantes.membros.firstOrNull { it.id == dadosRestantes.usuarioLocalId }?.funcao?.titulo ?: dadosMeuPerfil.funcao),
                             aoAbrirAbrigo = { abrirRestante("meu_abrigo") },
+                            // Abre a mesma tela de equipe acessada pelo Meu abrigo.
                             aoAbrirEquipe = { abrirRestante("equipe_abrigo") },
+                            // Abre Segurança e privacidade ao tocar em Segurança e acesso.
+                            aoSeguranca = { abrirRestante("seguranca_privacidade") },
+                            // Abre as preferências ao tocar em Notificações no Meu perfil.
+                            aoNotificacoes = { abrirRestante("preferencias_notificacoes") },
                             // Compartilha o nome pessoal com o membro correspondente na equipe.
+                            // Abre esta página pelo botão Aparência e acessibilidade do Meu perfil.
+                            aoAparencia = { abrirRestante("aparencia_acessibilidade") },
                             aoAtualizarPerfil = { atualizados ->
                                 dadosMeuPerfil = atualizados
                                 dadosRestantes = dadosRestantes.copy(membros = dadosRestantes.membros.map {

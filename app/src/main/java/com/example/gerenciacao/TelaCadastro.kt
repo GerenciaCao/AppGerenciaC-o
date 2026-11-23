@@ -29,6 +29,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+// Adicionando a Preview
+import androidx.compose.ui.tooling.preview.Preview
+
 // CORES DO GERENCIACÃO
 private val FundoCadastro = Color(0xFFFFFCF7)
 private val LaranjaCadastro = Color(0xFFFFB21C)
@@ -428,5 +431,29 @@ private fun LogoCadastro(
                 )
             }
         }
+    }
+}
+
+// Mostra a tela de cadastro no painel de prévia do Android Studio.
+@Preview(
+    // Define o nome exibido no painel.
+    name = "Cadastro",
+    // Exibe o fundo da prévia.
+    showBackground = true,
+    // Define a largura do celular.
+    widthDp = 412,
+    // Define a altura do celular.
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaCadastro() {
+    // Aplica o tema Material à prévia.
+    MaterialTheme {
+        TelaCadastro(
+            // Mantém o retorno sem navegação na prévia.
+            aoVoltarLogin = {},
+            // Dispensa a navegação após o cadastro na prévia.
+            aoConcluirCadastro = { _ -> }
+        )
     }
 }

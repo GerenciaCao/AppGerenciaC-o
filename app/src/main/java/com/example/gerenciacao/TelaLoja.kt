@@ -1,6 +1,15 @@
 package com.example.gerenciacao
 
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.animation.core.tween
+import kotlinx.coroutines.delay
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.selected
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -17,6 +26,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -30,6 +40,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+// Define o formato circular dos indicadores do carrossel.
+import androidx.compose.foundation.shape.CircleShape
 
 // Conserva o destino Loja que ja e usado pela navegacao do aplicativo.
 val LocalAbrirLoja = staticCompositionLocalOf<() -> Unit> { {} }
@@ -46,12 +58,12 @@ private val ImagensIndividuaisLoja: Map<String, Int?> = mapOf(
 
 // Exemplos ilustrativos do molde; seus valores nao representam ofertas comerciais reais.
 private val OfertasDemonstrativasLoja = listOf(
-    OfertaAbrigo(id = "vitrine-demo-racao", titulo = "Ração Premium", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 6990L,
-        descricao = "Produto demonstrativo com valor ilustrativo. Consulte embalagem, composição, disponibilidade e preço real com o parceiro."),
-    OfertaAbrigo(id = "vitrine-demo-umido", titulo = "Alimento úmido", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 599L,
-        descricao = "Imagem ilustrativa de alimento úmido. Este preço é apenas um exemplo para visualizar a vitrine."),
-    OfertaAbrigo(id = "vitrine-demo-petisco", titulo = "Alimento úmido Pedigree", categoria = "Alimentação", parceiro = "Exemplo de catálogo", centavos = 499L,
-        descricao = "Usa a imagem Pedigree adicionada ao projeto. O preço é ilustrativo, não uma oferta real da marca ou de um varejista."),
+    OfertaAbrigo(id = "vitrine-demo-racao", titulo = "Sachê Pedigree Carne", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 6990L,
+        descricao = "Para cães adultos de raças pequenas. Embalagem de 100 g."),
+    OfertaAbrigo(id = "vitrine-demo-umido", titulo = "Sachê Whiskas", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 599L,
+        descricao = "Para gatos adultos. Embalagem de 85 g."),
+    OfertaAbrigo(id = "vitrine-demo-petisco", titulo = "Sachê Pedigree Carne", categoria = "Alimentação", parceiro = "Exemplo de catálogo", centavos = 499L,
+        descricao = "Para cães adultos de raças pequenas. Embalagem de 100 g."),
     OfertaAbrigo(id = "vitrine-demo-banho", titulo = "Banho e tosa", categoria = "Serviços", parceiro = "Prestador de exemplo", tipo = "Serviço", centavos = 7999L,
         descricao = "Serviço demonstrativo. Confirme o atendimento, o preço real e as condições com o prestador."),
     OfertaAbrigo(id = "vitrine-demo-spa", titulo = "Spa para bichinhos", categoria = "Serviços", parceiro = "Prestador de exemplo", tipo = "Serviço", centavos = 7999L,
@@ -102,12 +114,8 @@ fun TelaLoja(ctx: ContextoAbrigo) {
     var maximo by rememberSaveable { mutableStateOf<Long?>(null) }
     var ordem by rememberSaveable { mutableStateOf("Destaques") }
     var mostrarFiltros by rememberSaveable { mutableStateOf(false) }
-    var mostrarCarrinho by rememberSaveable { mutableStateOf(false) }
     var aviso by rememberSaveable { mutableStateOf<String?>(null) }
 
-    // Carrinho de demonstração desta tela: cada ID representa uma embalagem.
-    // Não realiza compra, pagamento, entrega ou reserva de estoque.
-    var carrinho by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
     // Consulta o tamanho da fonte no contexto Compose antes de montar a lista.
     val colunas = if (LocalDensity.current.fontScale > 1.2f) 1 else 2
     val catalogo = catalogoLoja(ctx.dados.ofertas)
@@ -204,42 +212,35 @@ fun TelaLoja(ctx: ContextoAbrigo) {
     ) { espacos ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(espacos).imePadding(),
-            contentPadding = PaddingValues(20.dp),
+            contentPadding = PaddingValues(
+                // Repete as margens da lista de Animais.
+                start = 22.dp, end = 22.dp, top = 22.dp, bottom = 28.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                // Alinha o título à esquerda e o carrinho à direita.
+                // Repete tamanho, peso e altura do título de Animais.
                 Row(
-                    Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Parcerias", Modifier.weight(1f), color = TextoLoja,
-                        fontSize = 26.sp, fontWeight = FontWeight.Bold
+                        // Nome apresentado na página da Loja.
+                        text = "Parcerias",
+                        // Ocupa a largura disponível na linha.
+                        modifier = Modifier.weight(1f),
+                        // Mesmo tamanho do título Animais.
+                        fontSize = 30.sp,
+                        // Mesma altura de linha de Animais.
+                        lineHeight = 34.sp,
+                        // Mesmo peso tipográfico de Animais.
+                        fontWeight = FontWeight.Bold,
+                        // Mesmo tom usado nos textos principais.
+                        color = TextoPadraoApp
                     )
-                    BadgedBox(
-                        badge = {
-                            if (carrinho.isNotEmpty()) {
-                                Badge(containerColor = LaranjaLoja, contentColor = TextoLoja) {
-                                    Text(carrinho.size.toString())
-                                }
-                            }
-                        }
-                    ) {
-                        IconButton(
-                            onClick = { mostrarCarrinho = true },
-                            modifier = Modifier.semantics {
-                                contentDescription = "Abrir carrinho demonstrativo"
-                            }
-                        ) {
-                            Icon(
-                                painterResource(R.drawable.inicio_loja), null,
-                                Modifier.size(25.dp), tint = TextoLoja
-                            )
-                        }
-                    }
                 }
-
+                // Repete a distância entre título e busca da tela de Animais.
+                Spacer(Modifier.height(24.dp))
                 // Mantém busca e filtros funcionais sobre o catálogo atual.
                 OutlinedTextField(
                     value = busca,
@@ -247,7 +248,7 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     placeholder = {
-                        Text("Buscar produtos ou serviços", fontSize = 13.sp)
+                        Text("Buscar produtos ou serviços", fontSize = 14.sp, color = Color(0xFF7E7066))
                     },
                     leadingIcon = {
                         Icon(
@@ -255,21 +256,45 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                             Modifier.size(20.dp), tint = TextoLoja
                         )
                     },
+                    // Usa o mesmo botão circular marrom da tela de Animais.
                     trailingIcon = {
-                        IconButton(
+                        FilledIconButton(
+                            // Mantém o painel de filtros da loja já existente.
                             onClick = { mostrarFiltros = true },
-                            modifier = Modifier.semantics {
-                                contentDescription = "Filtrar ofertas"
-                            }
+                            modifier = Modifier
+                                // Define o diâmetro visual do botão.
+                                .size(38.dp)
+                                .semantics {
+                                    // Descreve a ação para leitores de tela.
+                                    contentDescription = "Filtrar ofertas"
+                                },
+                            // Deixa o botão circular.
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                // Usa o mesmo marrom do filtro de Animais.
+                                containerColor = Color(0xFF783E19)
+                            )
                         ) {
-                            Canvas(Modifier.size(22.dp)) {
-                                listOf(0.25f to 0.85f, 0.5f to 0.6f, 0.75f to 0.35f)
+                            Canvas(
+                                // Define o tamanho das três linhas do filtro.
+                                modifier = Modifier.size(18.dp)
+                            ) {
+                                // Define a cor clara das linhas sobre o botão marrom.
+                                val cor = Color(0xFFFFD993)
+                                // Define a espessura das linhas.
+                                val espessura = 1.5.dp.toPx()
+                                // Desenha linhas progressivamente menores.
+                                listOf(0.25f to 0.8f, 0.5f to 0.5f, 0.75f to 0.2f)
                                     .forEach { (y, largura) ->
                                         drawLine(
-                                            TextoLoja,
-                                            Offset(size.width * (1 - largura) / 2, size.height * y),
-                                            Offset(size.width * (1 + largura) / 2, size.height * y),
-                                            2.dp.toPx()
+                                            // Aplica a cor das linhas.
+                                            color = cor,
+                                            // Centraliza o início da linha.
+                                            start = Offset(size.width * (1f - largura) / 2, size.height * y),
+                                            // Centraliza o fim da linha.
+                                            end = Offset(size.width * (1f + largura) / 2, size.height * y),
+                                            // Aplica a espessura definida acima.
+                                            strokeWidth = espessura
                                         )
                                     }
                             }
@@ -280,7 +305,7 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                         focusedContainerColor = Color.White,
                         unfocusedContainerColor = Color.White,
                         focusedBorderColor = LaranjaLoja,
-                        unfocusedBorderColor = TextoLoja.copy(alpha = 0.2f)
+                        unfocusedBorderColor = Color(0xFFEADFD2)
                     )
                 )
                 Spacer(Modifier.height(12.dp))
@@ -412,42 +437,9 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     }
                 }
             } else {
-                // Banner único: evita esconder produtos com vários anúncios grandes.
+                // Carrossel de imagens exportadas do Figma, antes dos produtos.
                 item {
-                    Surface(
-                        onClick = { aviso = "Veja as ofertas dos parceiros abaixo." },
-                        shape = RoundedCornerShape(20.dp),
-                        color = AzulLoja
-                    ) {
-                        Row(
-                            Modifier.fillMaxWidth().heightIn(min = 150.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(
-                                Modifier.weight(1f).padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    "Cuidados para seu pet",
-                                    fontSize = 22.sp, lineHeight = 25.sp,
-                                    fontWeight = FontWeight.Bold, color = TextoLoja
-                                )
-                                Text("Ofertas dos parceiros", fontSize = 12.sp, color = TextoLoja)
-                                Text("Explore o catálogo ↓", fontSize = 12.sp, color = TextoLoja)
-                            }
-                            Box(
-                                Modifier.weight(0.75f).height(155.dp).background(LaranjaLoja),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Image(
-                                    painterResource(R.drawable.cachorro_inicio),
-                                    contentDescription = null,
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            }
-                        }
-                    }
+                    CarrosselBannersParcerias()
                 }
                 item {
                     // Sem histórico de compras, o título não promete "comprar novamente".
@@ -467,16 +459,12 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     ) {
                         linha.forEach { oferta ->
                             CartaoProdutoNovaLoja(
+                                // Recebe os dados do anúncio desta posição.
                                 oferta = oferta,
-                                quantidade = carrinho.count { it == oferta.id },
+                                // Mantém dois cartões por linha quando houver espaço.
                                 modifier = Modifier.weight(1f),
-                                abrir = { abrir(oferta) },
-                                adicionar = {
-                                    carrinho = ArrayList(carrinho).apply { add(oferta.id) }
-                                },
-                                remover = {
-                                    carrinho = ArrayList(carrinho).apply { remove(oferta.id) }
-                                }
+                                // Abre os detalhes do anúncio ao tocar no cartão.
+                                abrir = { abrir(oferta) }
                             )
                         }
                         if (linha.size < colunas) Spacer(Modifier.weight(1f))
@@ -486,41 +474,10 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     item { Text("Nenhuma oferta encontrada.", color = TextoLoja) }
                 }
 
-                // Categorias vêm das ofertas reais, evitando botões sem resultados.
-                item {
-                    Text(
-                        "Explore por categoria", fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold, color = TextoLoja
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    val categorias = catalogo
-                        .filter { if (tipo == "Serviços") it.tipo == "Serviço" else it.tipo != "Serviço" }
-                        .map { it.categoria }.distinct().sorted()
-                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(listOf("Todas") + categorias) { opcao ->
-                            FilterChip(
-                                selected = categoria == opcao,
-                                onClick = { categoria = opcao },
-                                label = { Text(opcao) },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    containerColor = AzulLoja,
-                                    selectedContainerColor = LaranjaLoja,
-                                    labelColor = TextoLoja,
-                                    selectedLabelColor = TextoLoja
-                                )
-                            )
-                        }
-                    }
-                }
+
 
             }
-            item {
-                Text(
-                    "Catálogo e carrinho demonstrativos. Compras e pagamentos são feitos com o parceiro.",
-                    fontSize = 11.sp, lineHeight = 16.sp, color = TextoLoja
-                )
-            }
+
         }
     }
 
@@ -537,130 +494,100 @@ fun TelaLoja(ctx: ContextoAbrigo) {
     }
 
     // Mostra os itens adicionados; não simula um checkout que ainda não existe.
-    if (mostrarCarrinho) {
-        AlertDialog(
-            onDismissRequest = { mostrarCarrinho = false },
-            title = { Text("Carrinho demonstrativo") },
-            text = {
-                Column(
-                    Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (carrinho.isEmpty()) Text("Seu carrinho está vazio.")
-                    carrinho.distinct().forEach { id ->
-                        val oferta = catalogo.firstOrNull { it.id == id }
-                        if (oferta != null) {
-                            Text(oferta.titulo + " × " + carrinho.count { it == id })
-                            TextButton(onClick = { mostrarCarrinho = false; abrir(oferta) }) {
-                                Text("Ver com o parceiro", color = TextoLoja)
-                            }
-                        }
-                    }
-                    if (carrinho.isNotEmpty()) {
-                        Text("Lista local de demonstração. Não reserva produtos nem realiza pagamentos.")
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { mostrarCarrinho = false }) { Text("Fechar") }
-            },
-            dismissButton = {
-                if (carrinho.isNotEmpty()) {
-                    TextButton(onClick = { carrinho = arrayListOf() }) { Text("Esvaziar") }
-                }
-            },
-            containerColor = Color(0xFFFFF8F4)
-        )
-    }
+
     aviso?.let { MensagemRestante(it) { aviso = null } }
 }
 
 // Mostra foto, informações, preço e ação nessa ordem.
 // A imagem permanece livre de botões sobrepostos.
+// Mostra somente foto, título breve e preço; tocar abre os detalhes do anúncio.
 @Composable
 private fun CartaoProdutoNovaLoja(
+    // Recebe os dados reais ou demonstrativos do anúncio.
     oferta: OfertaAbrigo,
-    quantidade: Int,
+    // Permite dimensionar o cartão dentro da linha.
     modifier: Modifier = Modifier,
-    abrir: () -> Unit,
-    adicionar: () -> Unit,
-    remover: () -> Unit
+    // Abre a página de detalhes já existente.
+    abrir: () -> Unit
 ) {
-    val servico = oferta.tipo == "Serviço"
-    // As embalagens correspondem às fotos que já existem no seu projeto.
-    val embalagem = when (oferta.id) {
-        "vitrine-demo-racao", "vitrine-demo-petisco" -> "Embalagem de 100 g"
-        "vitrine-demo-umido" -> "Embalagem de 85 g"
-        else -> if (servico) "Consulte horários" else "Consulte a embalagem"
+    // Separa os dados de embalagem do título para manter o anúncio breve.
+    val resumo = when (oferta.id) {
+        // Identifica os dois exemplos que usam a mesma embalagem Pedigree.
+        "vitrine-demo-racao", "vitrine-demo-petisco" -> "Cães adultos · 100 g"
+        // Identifica o exemplo que usa a embalagem Whiskas.
+        "vitrine-demo-umido" -> "Gatos adultos · 85 g"
+        // Não inventa dados de anúncios sem embalagem identificada.
+        else -> ""
     }
-    // Produtos sem embalagem definida levam aos detalhes antes de adicionar.
-    val embalagemDefinida = oferta.id in setOf(
-        "vitrine-demo-racao", "vitrine-demo-petisco", "vitrine-demo-umido"
-    )
     Surface(
-        onClick = abrir, modifier = modifier,
+        // Torna o cartão inteiro clicável.
+        onClick = abrir,
+        // Mantém o tamanho definido pela lista.
+        modifier = modifier,
+        // Preserva as bordas arredondadas.
         shape = RoundedCornerShape(18.dp),
+        // Mantém a cor clara do cartão atual.
         color = Color(0xFFFFF8F4),
+        // Mantém a borda discreta.
         border = BorderStroke(1.dp, TextoLoja.copy(alpha = 0.2f))
     ) {
         Column {
             FotoModeloLoja(
-                oferta,
-                Modifier.fillMaxWidth().height(145.dp)
+                // Mantém a imagem que já estava vinculada ao produto.
+                oferta = oferta,
+                // Preserva a altura atual da fotografia.
+                modifier = Modifier.fillMaxWidth().height(145.dp)
             )
             Column(
-                Modifier.padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(7.dp)
+                // Mantém espaço interno ao redor do título e do preço.
+                modifier = Modifier.padding(10.dp),
+                // Separa o preço do nome do produto.
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    oferta.titulo, fontSize = 15.sp, lineHeight = 19.sp,
-                    minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                    fontWeight = FontWeight.Bold, color = TextoLoja
+                    // Mostra somente o tipo de produto e a marca.
+                    text = oferta.titulo,
+                    // Mantém o nome legível dentro das duas colunas.
+                    fontSize = 14.sp,
+                    // Define o espaço entre as linhas do título.
+                    lineHeight = 18.sp,
+                    // Reserva duas linhas para manter os títulos alinhados.
+                    minLines = 1,
+                    // Limita o tamanho do título na vitrine.
+                    maxLines = 2,
+                    // Mantém o nome completo disponível nos detalhes.
+                    overflow = TextOverflow.Ellipsis,
+                    // Destaca o nome do anúncio.
+                    fontWeight = FontWeight.SemiBold,
+                    // Preserva o marrom dos textos.
+                    color = TextoLoja
                 )
-                Text(embalagem, fontSize = 11.sp, lineHeight = 15.sp, color = TextoLoja)
-                Text(
-                    oferta.parceiro, fontSize = 11.sp, maxLines = 1,
-                    overflow = TextOverflow.Ellipsis, color = TextoLoja
-                )
-                Text(
-                    oferta.centavos?.let(::reaisAbrigo) ?: "Consultar valor",
-                    fontSize = 19.sp, fontWeight = FontWeight.Bold, color = TextoLoja
-                )
-                if (!servico && embalagemDefinida && quantidade > 0) {
-                    // Permite ajustar a quantidade de embalagens sem cobrir a foto.
-                    Row(
-                        Modifier.fillMaxWidth().background(AzulLoja, RoundedCornerShape(12.dp)),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        IconButton(
-                            onClick = remover,
-                            modifier = Modifier.semantics { contentDescription = "Remover uma embalagem" }
-                        ) { Text("−", fontSize = 22.sp, color = TextoLoja) }
-                        Text(quantidade.toString(), fontWeight = FontWeight.Bold, color = TextoLoja)
-                        IconButton(
-                            onClick = adicionar,
-                            modifier = Modifier.semantics { contentDescription = "Adicionar uma embalagem" }
-                        ) { Text("+", fontSize = 22.sp, color = TextoLoja) }
-                    }
-                } else {
-                    Button(
-                        onClick = if (servico || !embalagemDefinida) abrir else adicionar,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AzulLoja, contentColor = TextoLoja
-                        )
-                    ) {
-                        Text(
-                            if (servico) "Ver serviço"
-                            else if (embalagemDefinida) "Adicionar"
-                            else "Ver opções",
-                            fontSize = 13.sp, fontWeight = FontWeight.Bold
-                        )
-                    }
+                if (resumo.isNotBlank()) {
+                    Text(
+                        // Mostra público e peso em uma única linha auxiliar.
+                        text = resumo,
+                        // Mantém a descrição menor que o título.
+                        fontSize = 12.sp,
+                        // Define uma altura confortável para a linha.
+                        lineHeight = 16.sp,
+                        // Limita o resumo a uma linha.
+                        maxLines = 1,
+                        // Evita que o texto ultrapasse o cartão.
+                        overflow = TextOverflow.Ellipsis,
+                        // Usa a cor auxiliar da identidade do aplicativo.
+                        color = MarromRestante
+                    )
                 }
+                Text(
+                    // Mantém o valor cadastrado ou a orientação para consultar.
+                    text = oferta.centavos?.let(::reaisAbrigo) ?: "Consultar valor",
+                    // Destaca o preço.
+                    fontSize = 19.sp,
+                    // Usa negrito no valor.
+                    fontWeight = FontWeight.Bold,
+                    // Aplica laranja escuro para manter leitura no fundo claro.
+                    color = Color(0xFFB94E00)
+                )
             }
         }
     }
@@ -765,3 +692,136 @@ private fun BannerCategoriaServicoLoja(
     }
 }
 
+
+// Associa cada imagem do carrossel ao seu texto acessível.
+// Exporte cada banner separadamente, sem as guias de alinhamento do Figma.
+private data class BannerCarrosselParceria(
+    val imagem: Int,
+    val descricao: String
+)
+
+private val BannersCarrosselParcerias = listOf(
+    BannerCarrosselParceria(R.drawable.banner_farmacia_caes, "Farmácia para cães"),
+    BannerCarrosselParceria(R.drawable.banner_alimentos_gatos, "Alimentos para gatos"),
+    BannerCarrosselParceria(R.drawable.banner_brinquedos_caes, "Brinquedos para cães"),
+    BannerCarrosselParceria(R.drawable.banner_higiene_animal, "Higiene animal"),
+    BannerCarrosselParceria(R.drawable.banner_brinquedos_gatos, "Brinquedos para gatos"),
+    BannerCarrosselParceria(R.drawable.banner_alimentos_caes, "Alimentos para cães"),
+    BannerCarrosselParceria(R.drawable.banner_farmacia_gatos, "Farmácia para gatos")
+)
+
+// Permite deslizar os banners e escolher uma página pelos indicadores.
+// Alterna os banners automaticamente e também permite arrastar.
+@Composable
+private fun CarrosselBannersParcerias() {
+    // Mantém a quantidade real de banners usada pelos pontos e pelas imagens.
+    val quantidade = BannersCarrosselParcerias.size
+    // Começa no meio da sequência, alinhado ao primeiro banner real.
+    val primeiraPagina = if (quantidade > 1) {
+        val meio = Int.MAX_VALUE / 2
+        meio - meio % quantidade
+    } else 0
+    // Usa uma identidade nova para não restaurar a posição do carrossel antigo.
+    val paginas = key("circular-loja", quantidade) {
+        rememberPagerState(
+            // Permite mostrar o banner anterior já na primeira abertura.
+            initialPage = primeiraPagina,
+            // Repete a sequência sem saltar do último ao primeiro na navegação normal.
+            pageCount = { if (quantidade > 1) Int.MAX_VALUE else 1 }
+        )
+    }
+    val escopo = rememberCoroutineScope()
+    // Detecta arraste para não disputar a navegação com a pessoa.
+    val arrastando by paginas.interactionSource.collectIsDraggedAsState()
+    // Mantém a prévia estática para facilitar a edição.
+    val modoPrevia = LocalInspectionMode.current
+
+    // Troca a cada três segundos, como solicitado para o Início.
+    LaunchedEffect(paginas, arrastando, modoPrevia) {
+        if (!modoPrevia && !arrastando && BannersCarrosselParcerias.size > 1) {
+            while (true) {
+                // Intervalo entre as trocas automáticas.
+                delay(2_500)
+                if (!paginas.isScrollInProgress) {
+                    paginas.animateScrollToPage(
+                        // Avança mantendo a sequência circular dos banners.
+                        page = paginas.currentPage + 1,
+                        // Define a duração do movimento.
+                        animationSpec = tween(durationMillis = 400)
+                    )
+                }
+            }
+        }
+    }
+
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        HorizontalPager(
+            // Reserva o mesmo espaço para o banner anterior e para o próximo.
+            contentPadding = PaddingValues(horizontal = if (quantidade > 1) 20.dp else 0.dp),
+            state = paginas,
+            modifier = Modifier.fillMaxWidth(),
+            // Deixa somente uma pequena faixa dos banners vizinhos visível.
+            pageSpacing = 12.dp,
+            // Identifica cada posição repetida sem duplicar as chaves das imagens.
+            key = { it }
+        ) { paginaVirtual ->
+            // Converte a posição repetida no índice de uma imagem já existente.
+            val indice = paginaVirtual % quantidade
+            val banner = BannersCarrosselParcerias[indice]
+            val pintura = painterResource(banner.imagem)
+            val tamanho = pintura.intrinsicSize
+            // Respeita as proporções do arquivo sem cortar o texto do banner.
+            val proporcao = if (
+                tamanho.width.isFinite() && tamanho.height.isFinite() &&
+                tamanho.width > 0f && tamanho.height > 0f
+            ) tamanho.width / tamanho.height else 2.45f
+
+            Image(
+                painter = pintura,
+                contentDescription = banner.descricao,
+                modifier = Modifier.fillMaxWidth()
+                    .aspectRatio(proporcao)
+                    .clip(RoundedCornerShape(16.dp)),
+                contentScale = ContentScale.Fit
+            )
+        }
+
+        // Os indicadores têm área de toque maior que o círculo visível.
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BannersCarrosselParcerias.forEachIndexed { indice, banner ->
+                // Mantém apenas um ponto para cada banner real.
+                val ativo = paginas.currentPage % quantidade == indice
+                Box(
+                    modifier = Modifier.size(40.dp).semantics {
+                        contentDescription = "Mostrar banner " + (indice + 1) + ": " + banner.descricao
+                        selected = ativo
+                    }.clickable {
+                        escopo.launch {
+                            // Abre a cópia próxima do banner escolhido, sem voltar ao começo da sequência.
+                            val destino = paginas.currentPage - (paginas.currentPage % quantidade) + indice
+                            paginas.animateScrollToPage(destino)
+                        }
+                    },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        Modifier.size(if (ativo) 9.dp else 6.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (ativo) TextoLoja
+                                else TextoLoja.copy(alpha = 0.25f)
+                            )
+                    )
+                }
+            }
+        }
+    }
+}

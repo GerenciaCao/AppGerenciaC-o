@@ -47,7 +47,21 @@ data class AnimalExemplo(
     val sobre: String = "",
     val historicoMedico: String = "",
     val arquivado: Boolean = false,
-    val especie: String = "Não informada"
+    val especie: String = "Não informada",
+    // Guarda o porte selecionado no cadastro.
+    val porte: String = "",
+    // Guarda a cor da pelagem.
+    val corPelagem: String = "",
+    // Guarda as vacinas informadas, sem presumir aplicação.
+    val vacinacoes: String = "",
+    // Guarda alergias, doenças e necessidades informadas.
+    val condicoesSaude: String = "",
+    // Guarda os medicamentos informados no cadastro.
+    val medicamentos: String = "",
+    // Guarda as características de comportamento.
+    val comportamento: String = "",
+    // Guarda informações complementares.
+    val observacoes: String = ""
 ) : java.io.Serializable
 
 // Mantém os animais de exemplo do projeto.

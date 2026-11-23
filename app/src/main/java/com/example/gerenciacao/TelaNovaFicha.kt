@@ -1,247 +1,391 @@
 package com.example.gerenciacao
 
 import android.content.Intent
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
-// Compartilha as cores do formulario da referencia sem alterar as demais telas.
-private val FundoFicha = Color(0xFFFFFCF7)
-private val MarromFicha = Color(0xFF783E19)
-private val TextoFicha = Color(0xFF38291F)
-private val AmareloFicha = Color(0xFFFFB414)
-private val CremeFicha = Color(0xFFFFEFC5)
-
-// Recebe os dados da nova ficha e pede revisao antes de adicionar a demonstracao local.
+// Usa os mesmos campos na criação e na edição da ficha.
 @Composable
 fun TelaNovaFicha(
-    // Reutiliza o formulario tambem para editar a ficha selecionada.
+    // Preenche o formulário quando um animal existente está sendo editado.
     animalInicial: AnimalExemplo? = null,
+    // Retorna à origem do formulário.
     aoVoltar: () -> Unit,
+    // Abre o início.
     aoInicio: () -> Unit,
-    // Abre a agenda pelo menu compartilhado.
+    // Abre a agenda.
     aoAgenda: () -> Unit,
+    // Abre a lista de animais.
     aoAnimais: () -> Unit,
+    // Abre as ações rápidas.
     aoAdicionar: () -> Unit,
-    aoSalvar: (AnimalExemplo) -> Unit
+    // Salva a ficha no estado compartilhado do aplicativo.
+    aoSalvar: (AnimalExemplo) -> Unit,
+    // Preserva a ação de arquivar durante a edição.
+    aoArquivar: ((String) -> Unit)? = null
 ) {
-    // Preserva o preenchimento durante rotacoes; a foto e opcional.
-    var nome by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.nome ?: "") }
-    var raca by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.raca ?: "") }
-    var idade by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.idade ?: "") }
-    var sexo by rememberSaveable { mutableStateOf(animalInicial?.sexo?.takeIf { it == "Fêmea" || it == "Macho" } ?: "Fêmea") }
-    var castrado by rememberSaveable { mutableStateOf(animalInicial?.castrado ?: true) }
-    var fotoUri by rememberSaveable { mutableStateOf(animalInicial?.fotoUri) }
-    var tentouContinuar by rememberSaveable { mutableStateOf(false) }
-    var revisando by rememberSaveable { mutableStateOf(false) }
+    // Guarda os dados básicos durante a edição e as rotações do aparelho.
+    var nome by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.nome.orEmpty()) }
+    var especie by rememberSaveable(animalInicial?.id) {
+        mutableStateOf(animalInicial?.especie?.takeUnless { it == "Não informada" }.orEmpty())
+    }
+    var sexo by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.sexo ?: "Não informado") }
+    var raca by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.raca.orEmpty()) }
+    var idade by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.idade.orEmpty()) }
+    var porte by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.porte.orEmpty()) }
+    var cor by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.corPelagem.orEmpty()) }
+    var castrado by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.castrado) }
+    // Guarda as informações de saúde sem inventar diagnósticos.
+    var vacinacoes by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.vacinacoes.orEmpty()) }
+    var condicoes by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.condicoesSaude.orEmpty()) }
+    var medicamentos by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.medicamentos.orEmpty()) }
+    // Guarda a apresentação e as observações do animal.
+    var descricao by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.sobre.orEmpty()) }
+    var comportamento by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.comportamento.orEmpty()) }
+    var observacoes by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.observacoes.orEmpty()) }
+    // Preserva o histórico antigo caso a ficha já o possua.
+    var historico by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.historicoMedico.orEmpty()) }
+    var fotoUri by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.fotoUri) }
+    var tentou by rememberSaveable(animalInicial?.id) { mutableStateOf(false) }
+    var confirmarArquivo by rememberSaveable { mutableStateOf(false) }
+    var aviso by rememberSaveable { mutableStateOf<String?>(null) }
     val contexto = LocalContext.current
-    val avisos = remember { SnackbarHostState() }
-    val escopo = rememberCoroutineScope()
-    val avisar: (String) -> Unit = { mensagem -> escopo.launch { avisos.showSnackbar(mensagem) } }
-    BackHandler(onBack = aoVoltar)
+    val miniatura = lembrarFotoMeuPerfil(fotoUri)
 
-    // Usa o seletor do Android e somente a imagem escolhida pelo usuario.
-    val escolherFoto = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+    // Detecta alterações em todos os campos antes de permitir sair sem salvar.
+    val alterado = nome != animalInicial?.nome.orEmpty() ||
+            especie != animalInicial?.especie?.takeUnless { it == "Não informada" }.orEmpty() ||
+            sexo != (animalInicial?.sexo ?: "Não informado") ||
+            raca != animalInicial?.raca.orEmpty() || idade != animalInicial?.idade.orEmpty() ||
+            porte != animalInicial?.porte.orEmpty() || cor != animalInicial?.corPelagem.orEmpty() ||
+            castrado != animalInicial?.castrado || vacinacoes != animalInicial?.vacinacoes.orEmpty() ||
+            condicoes != animalInicial?.condicoesSaude.orEmpty() || medicamentos != animalInicial?.medicamentos.orEmpty() ||
+            descricao != animalInicial?.sobre.orEmpty() || comportamento != animalInicial?.comportamento.orEmpty() ||
+            observacoes != animalInicial?.observacoes.orEmpty() || historico != animalInicial?.historicoMedico.orEmpty() ||
+            fotoUri != animalInicial?.fotoUri
+    val proteger = protegerRascunhoNoCabecalho(alterado)
+    val abrirLoja = LocalAbrirLoja.current
+    val abrirFinancas = LocalAbrirFinancas.current
+    // Exige somente o nome; foto e demais informações podem ficar sem preenchimento.
+    val erroNome = if (nome.trim().none { it.isLetter() }) "Informe o nome do animal." else null
+    val escolherFoto = rememberLauncherForActivityResult(
+        // Abre o seletor de documentos para manter o acesso à foto depois do cadastro.
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
         if (uri != null) {
-            runCatching { contexto.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-            fotoUri = uri.toString()
-        }
-    }
-    // Carrega uma miniatura fora da interface para nao travar ao abrir fotos grandes.
-    val miniatura by produceState<ImageBitmap?>(null, fotoUri) {
-        value = null
-        val uri = fotoUri?.let(Uri::parse)
-        if (uri != null) {
-            value = withContext(Dispatchers.IO) {
-                runCatching {
-                    val limites = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                    contexto.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, limites) }
-                    val opcoes = BitmapFactory.Options().apply {
-                        inSampleSize = 1
-                        while (maxOf(limites.outWidth, limites.outHeight) / inSampleSize > 512) inSampleSize *= 2
-                    }
-                    contexto.contentResolver.openInputStream(uri)?.use {
-                        BitmapFactory.decodeStream(it, null, opcoes)?.asImageBitmap()
-                    }
-                }.getOrNull()
-            }
+            runCatching {
+                contexto.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }.onSuccess { fotoUri = uri.toString() }
+                .onFailure { aviso = "Não foi possível manter o acesso à foto. Escolha outra imagem." }
         }
     }
 
-    // Rejeita nomes e racas sem letras e idades que nao representem um numero com unidade.
-    val erroNome = if (nome.trim().none { it.isLetter() }) "Informe o nome do bichinho." else null
-    val erroRaca = if (raca.trim().none { it.isLetter() }) "Informe a raça ou sem raça definida." else null
-    val idadeValida = Regex("^[0-9]{1,2}\\s*(anos?|m[eê]s(?:es)?|dias?)?$", RegexOption.IGNORE_CASE).matches(idade.trim())
-    val erroIdade = if (!idadeValida) "Informe uma idade válida. Ex.: 2 anos ou 6 meses." else null
-
-    // Mantem o rodape igual ao das telas de inicio e animais, com o formulario rolavel.
-    Column(Modifier.fillMaxSize().background(FundoFicha)) {
-        // A cor laranja pertence ao cabecalho compartilhado.
+    // Aplica a mesma confirmação ao botão do sistema e às saídas da tela.
+    BackHandler { proteger(aoVoltar) }
+    CompositionLocalProvider(
+        // Protege os dados ao navegar pela barra inferior.
+        LocalAbrirLoja provides { proteger(abrirLoja) },
+        LocalAbrirFinancas provides { proteger(abrirFinancas) },
+    ) {
         MolduraPadraoApp(
-            interceptarCabecalho = protegerRascunhoNoCabecalho(nome != (animalInicial?.nome ?: "") || raca != (animalInicial?.raca ?: "") ||
-                    idade != (animalInicial?.idade ?: "") || fotoUri != animalInicial?.fotoUri ||
-                    sexo != (animalInicial?.sexo?.takeIf { it == "Fêmea" || it == "Macho" } ?: "Fêmea") ||
-                    castrado != (animalInicial?.castrado ?: true)),
-            modifier = Modifier.weight(1f), containerColor = FundoFicha,
-            snackbarHost = { SnackbarHost(avisos) },
+            // Mantém a identidade visual das telas internas.
+            containerColor = FundoPadraoApp,
+            // Protege as saídas pelo perfil e pelos três pontos.
+            interceptarCabecalho = proteger,
+            // Reutiliza a navegação inferior do aplicativo.
             bottomBar = {
-                MenuInferiorInicio(avisar, selecionado = "Animais", aoInicio = aoInicio,
-                    aoAnimais = aoAnimais, aoAdicionar = aoAdicionar, aoAgenda = aoAgenda)
+                MenuInferiorInicio(
+                    avisar = { aviso = it },
+                    selecionado = "Animais",
+                    aoInicio = { proteger(aoInicio) },
+                    aoAnimais = { proteger(aoAnimais) },
+                    aoAdicionar = { proteger(aoAdicionar) },
+                    aoAgenda = { proteger(aoAgenda) }
+                )
             }
         ) { espacos ->
             Column(
-                Modifier.fillMaxSize().padding(espacos).imePadding()
+                // Permite preencher todo o formulário sem cortar campos pelo teclado.
+                modifier = Modifier.fillMaxSize().padding(espacos).imePadding()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)
+                    .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp),
+                // Separa os campos de cada seção.
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
-                // A seta volta para a tela que abriu o formulario.
-                // O cabecalho compartilhado agora apresenta o perfil da pessoa.
-                TituloPaginaPadrao(if (animalInicial == null) "Nova ficha" else "Editar ficha", aoVoltar)
-                Spacer(Modifier.height(24.dp))
-
-                // Abre a galeria e mostra a miniatura quando uma foto foi selecionada.
+                TituloPaginaPadrao(
+                    // Mantém os títulos distintos para criação e edição.
+                    titulo = if (animalInicial == null) "Nova ficha" else "Editar ficha",
+                    // Retorna com confirmação de descarte quando necessária.
+                    aoVoltar = { proteger(aoVoltar) }
+                )
                 Surface(
+                    // Permite escolher ou trocar a imagem tocando na área da foto.
                     onClick = { escolherFoto.launch(arrayOf("image/*")) },
-                    modifier = Modifier.fillMaxWidth(), color = CremeFicha, shape = RoundedCornerShape(22.dp)
+                    // Mantém um espaço uniforme para a imagem no formulário.
+                    modifier = Modifier.fillMaxWidth().height(132.dp),
+                    // Mantém os cantos arredondados.
+                    shape = RoundedCornerShape(18.dp),
+                    // Usa o azul padrão atrás da imagem transparente do animal.
+                    color = Color(0xFFB7E7FC)
                 ) {
-                    Row(Modifier.heightIn(min = 80.dp).padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                        val foto = miniatura
-                        if (foto != null) {
-                            Image(foto, "Foto selecionada do bichinho", Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
-                        } else {
-                            Icon(painterResource(R.drawable.ficha_camera), null, Modifier.size(30.dp), tint = MarromFicha)
-                        }
-                        Spacer(Modifier.width(20.dp))
-                        Column {
-                            Text(if (fotoUri == null) "Adicionar foto do bichinho" else "Alterar foto do bichinho",
-                                fontSize = 15.sp, lineHeight = 19.sp, fontWeight = FontWeight.Bold, color = MarromFicha)
-                            Spacer(Modifier.height(6.dp))
-                            Text("Uma foto ajuda na identificação.", fontSize = 10.sp, lineHeight = 14.sp, color = MarromFicha)
+                    if (miniatura != null) {
+                        Image(
+                            // Mostra a imagem selecionada, sem alterar seu arquivo.
+                            bitmap = miniatura,
+                            // Explica a ação de troca.
+                            contentDescription = "Foto do animal; toque para alterar",
+                            // Ocupa o espaço da imagem.
+                            modifier = Modifier.fillMaxSize(),
+                            // Mantém a foto inteira durante o preenchimento.
+                            contentScale = ContentScale.Fit
+                        )
+                    } else {
+                        Column(
+                            // Centraliza o controle de escolha da imagem.
+                            modifier = Modifier.fillMaxSize(),
+                            // Centraliza os elementos horizontalmente.
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            // Separa o ícone da orientação.
+                            verticalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterVertically)
+                        ) {
+                            Icon(
+                                // Reutiliza o ícone de câmera existente.
+                                painter = painterResource(R.drawable.ficha_camera),
+                                // O texto abaixo explica a ação.
+                                contentDescription = null,
+                                // Define uma medida legível para a câmera.
+                                modifier = Modifier.size(28.dp),
+                                // Usa o marrom dos controles.
+                                tint = MarromPadraoApp
+                            )
+                            Text("Adicionar imagem", color = MarromPadraoApp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
-                Spacer(Modifier.height(18.dp))
-
-                // Mostra os erros junto ao campo e mantem a digitacao livre para corrigir os dados.
-                CampoNovaFicha("Nome", "Ex.: Lua", nome, { nome = it }, if (tentouContinuar) erroNome else null)
-                Spacer(Modifier.height(12.dp))
-                CampoNovaFicha("Raça", "Ex.: sem raça definida", raca, { raca = it }, if (tentouContinuar) erroRaca else null)
-                Spacer(Modifier.height(12.dp))
-                CampoNovaFicha("Idade", "Ex.: 2 anos", idade, { idade = it }, if (tentouContinuar) erroIdade else null)
-                Spacer(Modifier.height(18.dp))
-
-                // As opcoes iniciam como no modelo e podem ser alteradas antes de continuar.
-                Text("Sexo", color = MarromFicha, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OpcaoFicha("Fêmea", sexo == "Fêmea") { sexo = "Fêmea" }
-                    OpcaoFicha("Macho", sexo == "Macho") { sexo = "Macho" }
+                if (fotoUri != null) {
+                    TextButton(
+                        // Mantém acessível a troca da foto.
+                        onClick = { escolherFoto.launch(arrayOf("image/*")) }
+                    ) { Text("Alterar imagem", color = MarromPadraoApp) }
                 }
-                Spacer(Modifier.height(12.dp))
-                Text("Castrado?", color = MarromFicha, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    OpcaoFicha("Sim", castrado) { castrado = true }
-                    OpcaoFicha("Não", !castrado) { castrado = false }
-                }
-                Spacer(Modifier.height(18.dp))
+                SecaoFormularioAnimal("Informações básicas")
+                CampoFormularioAnimal("Nome", nome, { nome = it }, "Ex.: Lua", erro = if (tentou) erroNome else null)
+                SeletorRestante(
+                    // Mostra os nomes amigáveis e salva os valores esperados pelos filtros.
+                    rotulo = "Espécie",
+                    valor = when (especie) { "Cães" -> "Cão"; "Gatos" -> "Gato"; "" -> "Selecionar"; else -> especie },
+                    opcoes = listOf("" to "Não informado", "Cães" to "Cão", "Gatos" to "Gato", "Outros" to "Outro"),
+                    selecionar = { especie = it }
+                )
+                SeletorRestante("Sexo", sexo, listOf("Fêmea" to "Fêmea", "Macho" to "Macho", "Não informado" to "Não informado")) { sexo = it }
+                CampoFormularioAnimal("Raça", raca, { raca = it }, "Ex.: SRD")
+                CampoFormularioAnimal("Idade", idade, { idade = it }, "Ex.: 2 anos")
+                SeletorRestante("Porte", porte.ifBlank { "Selecionar" },
+                    listOf("" to "Não informado", "Pequeno" to "Pequeno", "Médio" to "Médio", "Grande" to "Grande")) { porte = it }
+                CampoFormularioAnimal("Cor", cor, { cor = it }, "Ex.: Caramelo")
 
-                // Impede o avanco ate que os tres campos obrigatorios estejam validos.
-                Button(
-                    onClick = {
-                        tentouContinuar = true
-                        if (erroNome == null && erroRaca == null && erroIdade == null) revisando = true
-                    }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AmareloFicha, contentColor = TextoFicha)
-                ) { Text("Continuar", fontSize = 17.sp, fontWeight = FontWeight.Bold) }
+                SecaoFormularioAnimal("Saúde e cuidados")
+                SeletorRestante("Castração", when (castrado) {
+                    true -> if (sexo == "Fêmea") "Castrada" else "Castrado"
+                    false -> if (sexo == "Fêmea") "Não castrada" else "Não castrado"
+                    null -> "Não informado"
+                }, listOf("sim" to "Sim", "nao" to "Não", "" to "Não informado")) {
+                    castrado = when (it) { "sim" -> true; "nao" -> false; else -> null }
+                }
+                CampoFormularioAnimal("Vacinações", vacinacoes, { vacinacoes = it }, "Informe as vacinas, se houver...", longo = true)
+                CampoFormularioAnimal("Condições de saúde", condicoes, { condicoes = it }, "Alergias, doenças, necessidades especiais", longo = true)
+                CampoFormularioAnimal("Medicamentos em uso", medicamentos, { medicamentos = it }, "Informe os medicamentos, se houver...", longo = true)
+                if (!animalInicial?.historicoMedico.isNullOrBlank()) {
+                    // Mantém os registros anteriores acessíveis durante a edição.
+                    CampoFormularioAnimal("Histórico anterior", historico, { historico = it }, "Registros já cadastrados", longo = true)
+                }
+
+                SecaoFormularioAnimal("Descrição e comportamento")
+                CampoFormularioAnimal("Descrição", descricao, { descricao = it }, "Informe uma breve descrição do animal", longo = true)
+                CampoFormularioAnimal("Personalidade e comportamento", comportamento, { comportamento = it }, "Ex.: dócil, brincalhão, agitado...", longo = true)
+                CampoFormularioAnimal("Observações adicionais", observacoes, { observacoes = it }, "Outras informações importantes...", longo = true)
+                Row(
+                    // Mantém as ações finais lado a lado, como na referência.
+                    modifier = Modifier.fillMaxWidth().padding(top = 10.dp),
+                    // Separa Cancelar e Salvar.
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        // Volta sem salvar depois da confirmação, quando necessária.
+                        onClick = { proteger(aoVoltar) },
+                        // Divide a largura com o botão de salvar.
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        // Mantém o formato dos controles do aplicativo.
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Cancelar", color = MarromPadraoApp) }
+                    Button(
+                        // Valida os dados obrigatórios e salva todos os campos.
+                        onClick = {
+                            tentou = true
+                            if (erroNome == null) {
+                                val idadeFinal = idade.trim().toIntOrNull()?.let {
+                                    it.toString() + if (it == 1) " ano" else " anos"
+                                } ?: idade.trim()
+                                // Preserva o ID, a situação e o arquivamento durante a edição.
+                                val base = animalInicial ?: AnimalExemplo(
+                                    nome = nome.trim(), idade = idadeFinal, situacao = "No abrigo"
+                                )
+                                aoSalvar(base.copy(
+                                    nome = nome.trim(), especie = especie, sexo = sexo,
+                                    raca = raca.trim(), idade = idadeFinal, porte = porte,
+                                    corPelagem = cor.trim(), castrado = castrado, fotoUri = fotoUri,
+                                    vacinacoes = vacinacoes.trim(), condicoesSaude = condicoes.trim(),
+                                    medicamentos = medicamentos.trim(), sobre = descricao.trim(),
+                                    comportamento = comportamento.trim(), observacoes = observacoes.trim(),
+                                    historicoMedico = historico.trim()
+                                ))
+                            }
+                        },
+                        // Divide a largura com Cancelar e mantém uma área de toque confortável.
+                        modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+                        // Mantém o formato do botão.
+                        shape = RoundedCornerShape(14.dp),
+                        // Usa a cor de destaque do aplicativo.
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFFB414),
+                            contentColor = TextoPadraoApp
+                        )
+                    ) { Text("Salvar", fontWeight = FontWeight.Bold) }
+                }
+                if (animalInicial != null && aoArquivar != null) {
+                    TextButton(
+                        // Preserva a ação de arquivamento da tela de edição.
+                        onClick = { confirmarArquivo = true },
+                        // Mantém a ação abaixo dos botões principais.
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Arquivar ficha", color = MarromPadraoApp) }
+                }
             }
         }
     }
-
-    // Permite revisar e confirmar uma ficha temporaria sem alegar persistencia no banco.
-    if (revisando) {
+    if (confirmarArquivo && animalInicial != null && aoArquivar != null) {
         AlertDialog(
-            onDismissRequest = { revisando = false }, title = { Text("Revisar ficha", color = TextoFicha) },
-            text = { Text("${nome.trim()} · ${idade.trim()}\n${raca.trim()}\n$sexo · Castrado: ${if (castrado) "Sim" else "Não"}\n\nA ficha ficará apenas na demonstração, sem banco de dados.") },
+            // Cancela o arquivamento ao fechar a janela.
+            onDismissRequest = { confirmarArquivo = false },
+            // Identifica o animal que será arquivado.
+            title = { Text("Arquivar " + animalInicial.nome + "?") },
+            // Explica que o cadastro não será excluído.
+            text = { Text("A ficha sairá da lista ativa. Os dados serão mantidos; alterações não salvas serão descartadas.") },
+            // Confirma a ação já existente.
             confirmButton = {
                 TextButton(onClick = {
-                    revisando = false
-                    val idadeFormatada = idade.trim().toIntOrNull()?.let { "$it ${if (it == 1) "ano" else "anos"}" } ?: idade.trim()
-                    // Preserva ID, situacao e descricao ao editar o animal existente.
-                    val ficha = animalInicial?.copy(nome = nome.trim(), idade = idadeFormatada,
-                        raca = raca.trim(), sexo = sexo, castrado = castrado, fotoUri = fotoUri)
-                        ?: AnimalExemplo(nome.trim(), idadeFormatada, "No abrigo", raca.trim(), sexo, castrado, fotoUri)
-                    aoSalvar(ficha)
-                }) { Text(if (animalInicial == null) "Adicionar à lista" else "Salvar alterações", color = MarromFicha) }
+                    confirmarArquivo = false
+                    aoArquivar(animalInicial.id)
+                }) { Text("Arquivar") }
             },
-            dismissButton = { TextButton(onClick = { revisando = false }) { Text("Revisar", color = MarromFicha) } },
-            containerColor = FundoFicha
+            // Permite desistir sem mudar o cadastro.
+            dismissButton = {
+                TextButton(onClick = { confirmarArquivo = false }) { Text("Cancelar") }
+            }
         )
     }
+    // Mostra mensagens sem apagar os dados preenchidos.
+    aviso?.let { MensagemRestante(it) { aviso = null } }
 }
 
-// Exibe um campo com rotulo externo e mensagem de validacao acessivel.
+// Destaca cada grupo sem criar uma caixa para o formulário inteiro.
 @Composable
-private fun CampoNovaFicha(titulo: String, exemplo: String, valor: String, aoAlterar: (String) -> Unit, erro: String?) {
-    Text(titulo, color = MarromFicha, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(6.dp))
-    OutlinedTextField(
-        value = valor, onValueChange = aoAlterar, modifier = Modifier.fillMaxWidth().height(50.dp),
-        singleLine = true, placeholder = { Text(exemplo, fontSize = 14.sp, lineHeight = 18.sp, color = Color(0xFF7E7066)) },
-        textStyle = TextStyle(fontSize = 14.sp, lineHeight = 18.sp, color = TextoFicha),
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-        isError = erro != null,
-
-        shape = RoundedCornerShape(15.dp),
-        colors = OutlinedTextFieldDefaults.colors(
-            focusedBorderColor = AmareloFicha, unfocusedBorderColor = Color(0xFFEADFD2),
-            focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, cursorColor = MarromFicha)
+private fun SecaoFormularioAnimal(titulo: String) {
+    Text(
+        // Identifica o grupo de campos.
+        text = titulo,
+        // Separa as seções.
+        modifier = Modifier.padding(top = 12.dp),
+        // Mantém a hierarquia dos títulos secundários.
+        fontSize = 20.sp,
+        // Destaca o título da seção.
+        fontWeight = FontWeight.Bold,
+        // Usa o marrom dos títulos.
+        color = TextoPadraoApp
     )
-    // Mantem o erro fora da altura do campo para que a mensagem nao seja cortada.
-    if (erro != null) {
-        Text(erro, modifier = Modifier.padding(top = 4.dp), color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
+}
+
+// Mantém os rótulos externos e campos que crescem conforme a necessidade.
+@Composable
+private fun CampoFormularioAnimal(
+    titulo: String,
+    valor: String,
+    mudar: (String) -> Unit,
+    dica: String,
+    longo: Boolean = false,
+    erro: String? = null
+) {
+    Column(
+        // Mantém o rótulo próximo do seu campo.
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(titulo, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = MarromPadraoApp)
+        OutlinedTextField(
+            // Mostra o valor atual.
+            value = valor,
+            // Evita textos excessivos sem limitar as observações a uma linha.
+            onValueChange = { mudar(it.take(if (longo) 4000 else 150)) },
+            // Ocupa a largura do formulário sem uma altura fixa.
+            modifier = Modifier.fillMaxWidth(),
+            // Permite textos maiores nos campos descritivos.
+            singleLine = !longo,
+            // Reserva mais espaço para os textos de saúde e apresentação.
+            minLines = if (longo) 3 else 1,
+            // Mostra uma orientação quando o campo está vazio.
+            placeholder = { Text(dica, fontSize = 14.sp) },
+            // Indica os erros junto ao campo.
+            isError = erro != null,
+            // Mantém os cantos arredondados.
+            shape = RoundedCornerShape(14.dp),
+            // Usa a paleta da referência sem alterar as demais telas.
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = Color(0xFFFFF3E5),
+                unfocusedContainerColor = Color(0xFFFFF3E5),
+                focusedBorderColor = MarromPadraoApp,
+                unfocusedBorderColor = Color(0xFFEADFD2),
+                cursorColor = MarromPadraoApp
+            )
+        )
+        if (erro != null) Text(erro, fontSize = 12.sp, color = MaterialTheme.colorScheme.error)
     }
 }
 
-// Destaca a opcao selecionada e disponibiliza a semantica de selecao do Compose.
+// Permite conferir todos os campos no editor.
+@Preview(
+    // Identifica a prévia do formulário.
+    name = "Nova ficha completa",
+    // Mostra o fundo da tela.
+    showBackground = true,
+    // Define a largura de referência.
+    widthDp = 412,
+    // Define a altura de referência.
+    heightDp = 917
+)
 @Composable
-private fun OpcaoFicha(texto: String, selecionada: Boolean, aoSelecionar: () -> Unit) {
-    FilterChip(
-        selected = selecionada, onClick = aoSelecionar, modifier = Modifier.width(104.dp),
-        label = { Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-            Text(texto, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Bold)
-        } },
-        shape = CircleShape, border = null,
-        colors = FilterChipDefaults.filterChipColors(selectedContainerColor = CremeFicha,
-            selectedLabelColor = MarromFicha, containerColor = Color(0xFFFFF7EB), labelColor = MarromFicha)
-    )
+private fun PreviaNovaFichaCompleta() {
+    MaterialTheme {
+        TelaNovaFicha(
+            aoVoltar = {}, aoInicio = {}, aoAgenda = {}, aoAnimais = {},
+            aoAdicionar = {}, aoSalvar = {}
+        )
+    }
 }

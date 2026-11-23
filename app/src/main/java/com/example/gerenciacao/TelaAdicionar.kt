@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
+// Habilita a prévia no Android Studio.
+import androidx.compose.ui.tooling.preview.Preview
+
 // Reune as cinco acoes do botao mais e encaminha o cadastro para a Nova ficha.
 @Composable
 fun TelaAdicionar(
@@ -144,5 +147,47 @@ private fun AcaoAdicionar(
             Spacer(Modifier.width(8.dp))
             Icon(painterResource(R.drawable.inicio_seta), null, Modifier.size(15.dp), tint = Color(0xFF783E19))
         }
+    }
+}
+
+// Exibe Ações rápidas na prévia do editor.
+@Preview(
+    // Define o nome da prévia.
+    name = "Ações rápidas",
+    // Mostra o fundo da tela.
+    showBackground = true,
+    // Define a largura em dp.
+    widthDp = 412,
+    // Define a altura em dp.
+    heightDp = 917
+)
+
+@Composable
+private fun PreviaTelaAdicionar() {
+    MaterialTheme {
+        TelaAdicionar(
+            // Mantém as ações vazias apenas na prévia.
+            aoVoltar = {},
+            // Representa o acesso ao início.
+            aoInicio = {},
+            // Representa o acesso à agenda.
+            aoAgenda = {},
+            // Representa o acesso aos animais.
+            aoAnimais = {},
+            // Representa o cadastro de um animal.
+            aoCadastrarBichinho = {},
+            // Representa o registro de doação.
+            aoRegistrarDoacao = {},
+            // Representa o registro de despesa.
+            aoRegistrarDespesa = {},
+            // Representa o agendamento de cuidado.
+            aoAgendarCuidado = {},
+            // Representa a criação de postagem.
+            aoCriarPostagem = {},
+            // Representa o acesso às parcerias.
+            aoParcerias = {},
+            // Representa o acesso à divulgação.
+            aoDivulgacao = {}
+        )
     }
 }

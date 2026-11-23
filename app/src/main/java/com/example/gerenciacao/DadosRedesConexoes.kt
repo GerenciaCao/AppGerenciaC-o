@@ -22,21 +22,31 @@ data class AbrigoRede(
 
 // Valores de exemplo; nao correspondem a uma busca real nem usam a localizacao do aparelho.
 val AbrigosRedeExemplo = listOf(
-    AbrigoRede("patas-unidas", "Patas Unidas", "São Paulo", "Vila Esperança",
-        "Um exemplo de abrigo dedicado ao acolhimento e à preparação dos bichinhos para um novo lar.",
-        18, 30, 2.4, "contato@patasunidas.example", listOf("Ana", "Pedro", "Marina")),
+    AbrigoRede(
+        "patas-unidas", "Patas Unidas", "São Paulo", "Vila Esperança",
+        "Por trás de cada olhar acolhido na ONG Patas Unidas, existe o sonho de uma nova oportunidade...",
+        18, 30, 2.4,
+        "contato@patasunidas.example",
+        listOf("Ana", "Pedro", "Marina"),
+        // Mostra esta imagem no lugar da patinha à esquerda do abrigo.
+        fotoRecurso = R.drawable.ongpatasunidas
+    ),
     AbrigoRede("cantinho-focinhos", "Cantinho dos Focinhos", "São Paulo", "Vila Maria",
-        "Um exemplo de abrigo que acolhe bichinhos e acompanha os cuidados de cada um até a chegada de uma nova família.",
-        25, 40, 4.7, "contato@cantinhodosfocinhos.example", listOf("Ana", "Bruno", "Clara", "Daniel")),
+        "No Cantinho dos Focinhos, cada resgate representa o início de uma nova história, com a esperança de...",
+        25, 40, 4.7, "contato@cantinhodosfocinhos.example", listOf("Ana", "Bruno", "Clara", "Daniel"),// Define a foto deste abrigo.
+        fotoRecurso = R.drawable.cantinhodosfocinhos),
     AbrigoRede("lar-animal", "Abrigo Lar Animal", "Guarulhos", "Centro",
         "Um exemplo de equipe que organiza o acolhimento, os cuidados e as adoções dos bichinhos.",
-        20, 20, 7.2, "contato@laranimal.example", listOf("Carla", "Rafael")),
+        20, 20, 7.2, "contato@laranimal.example", listOf("Carla", "Rafael"),// Define a foto deste abrigo.
+                fotoRecurso = R.drawable.abrigolaranimal),
     AbrigoRede("patas-felizes", "Patas Felizes", "São Paulo", "Santana",
-        "Um exemplo de abrigo com uma rotina de cuidado e convivência para os bichinhos acolhidos.",
-        12, 24, 9.1, "contato@patasfelizes.example", listOf("Paula", "João")),
+        "O abrigo Patas Felizes é um lugar onde histórias se encontram, vidas são transformadas e cada patinha recebe...",
+        12, 24, 9.1, "contato@patasfelizes.example", listOf("Paula", "João"),// Define a foto deste abrigo.
+        fotoRecurso = R.drawable.patasfelizes),
     AbrigoRede("patinhas-bem", "Patinhas do Bem", "Osasco", "Centro",
-        "Um exemplo de abrigo que reúne pessoas dedicadas a oferecer cuidado e encontrar novos lares.",
-        16, 25, 12.8, "contato@patinhasdobem.example", listOf("Luiza", "Marcos"))
+        "Na ONG Patinhas do Bem, cada gesto de cuidado...",
+        16, 25, 12.8, "contato@patinhasdobem.example", listOf("Luiza", "Marcos"),// Define a foto deste abrigo.
+        fotoRecurso = R.drawable.patinhasdobem)
 )
 
 // Calcula a disponibilidade sem exibir vagas negativas quando a capacidade estiver excedida.

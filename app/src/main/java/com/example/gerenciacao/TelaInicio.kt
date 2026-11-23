@@ -1,5 +1,9 @@
 package com.example.gerenciacao
 
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import kotlinx.coroutines.launch
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -76,7 +80,9 @@ fun TelaInicio(
     compromissos: List<CompromissoAbrigo> = emptyList(),
     aoAbrirParcerias: (() -> Unit)? = null,
     aoEncontrarCuidadores: (() -> Unit)? = null,
-    imagemParceria: Int? = null
+    imagemParceria: Int? = null,
+    // Recebe a data do compromisso tocado no aviso do Início.
+    aoAbrirAgendaNaData: (String) -> Unit = { aoAgenda() }
 ) {
     // Mantem o menu e os avisos locais durante a rotacao do celular.
     var confirmarSaida by rememberSaveable { mutableStateOf(false) }
@@ -120,6 +126,8 @@ fun TelaInicio(
         animationSpec = tween(280), label = "entradaInicio")
 
     // A home e as outras telas internas agora usam a mesma moldura e o mesmo cabecalho.
+    // Recupera o destino da Loja para o botão do banner.
+    val abrirLojaBanner = LocalAbrirLoja.current
     val topoAtual = LocalCabecalhoApp.current
     CompositionLocalProvider(LocalCabecalhoApp provides topoAtual.copy(
         // A saudação permanece visível no Início, inclusive em prévias.
@@ -147,9 +155,22 @@ fun TelaInicio(
                 alpha = if (modoPrevia) 1f else entrada
                 translationY = if (modoPrevia) 0f else (1f - entrada) * 12.dp.toPx()
             }.verticalScroll(rememberScrollState())
-                .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)) {
-                BannerPedigreeInicio(imagemParceria)
-                Spacer(Modifier.height(22.dp))
+                .padding(horizontal = 20.dp).padding(top = 22.dp, bottom = 28.dp)) {
+                // Mostra os compromissos do dia dentro do conteúdo, acima do banner.
+                // Usa os registros já recebidos da agenda, sem fixar nomes ou datas.
+                AvisoCuidadosHojeInicio(
+                    compromissos = compromissos,
+                    hoje = hoje,
+                    horarioAtual = horarioAtual,
+                    // Abre o dia do compromisso; sem registro, abre a agenda normalmente.
+                    aoAbrirAgenda = { data ->
+                        if (data != null) aoAbrirAgendaNaData(data) else aoAgenda()
+                    }
+                )
+                // Aumenta o espaço entre o aviso e o banner.
+                Spacer(Modifier.height(28.dp))
+                CarrosselAutomaticoInicio(aoAbrirParcerias = abrirLojaBanner)
+                Spacer(Modifier.height(14.dp))
                 Text("Ações rápidas", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextoInicio)
                 Spacer(Modifier.height(12.dp))
 
@@ -158,14 +179,14 @@ fun TelaInicio(
                     val largura = (maxWidth * 0.47f).coerceIn(142.dp, 166.dp)
                     Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(bottom = 2.dp),
                         horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        AtalhoCompactoInicio("Cadastrar animal", R.drawable.inicio_pata, Color(0xFFFFD16D), largura) { aoNovaFicha() }
-                        AtalhoCompactoInicio("Registrar doação", R.drawable.inicio_coracao, Color(0xFFC6E9B9), largura) {
+                        AtalhoCompactoInicio("Cadastrar animal", R.drawable.iconanimais, Color(0xFF432818), largura) { aoNovaFicha() }
+                        AtalhoCompactoInicio("Registrar doação", R.drawable.inicio_carteira, Color(0xFF432818), largura) {
                             aoRegistrarDoacao?.invoke() ?: avisar("O registro de doações estará disponível em breve.")
                         }
-                        AtalhoCompactoInicio("Registrar despesa", R.drawable.inicio_recibo, Color(0xFFFFC8AB), largura) {
+                        AtalhoCompactoInicio("Registrar despesa", R.drawable.inicio_recibo, Color(0xFF432818), largura) {
                             aoRegistrarDespesa?.invoke() ?: avisar("O registro de despesas estará disponível em breve.")
                         }
-                        AtalhoCompactoInicio("Ver bichinhos", R.drawable.inicio_busca, Color(0xFFBEE8E2), largura) { aoAbrirAnimais() }
+                        AtalhoCompactoInicio("Ver bichinhos", R.drawable.iconanimais, Color(0xFF432818), largura) { aoAbrirAnimais() }
                     }
                 }
                 Spacer(Modifier.height(18.dp))
@@ -176,32 +197,16 @@ fun TelaInicio(
                         Text("Ver todos", fontSize = 12.sp, color = MarromInicio, fontWeight = FontWeight.SemiBold)
                     }
                 }
-                // Exibe o proximo compromisso real ou o estado vazio; nao inventa agendamentos.
-                Surface(onClick = aoAgenda, color = CremeInicio, shape = RoundedCornerShape(19.dp)) {
-                    Row(Modifier.fillMaxWidth().heightIn(min = 86.dp).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(40.dp).background(Color.White, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                            IconeInicio(R.drawable.inicio_calendario, null, 20)
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(proximo?.titulo ?: "Nenhum cuidado agendado", fontSize = 15.sp, lineHeight = 20.sp,
-                                fontWeight = FontWeight.Bold, color = TextoInicio)
-                            Text(proximo?.let { "${if (it.data == hoje) "Hoje" else it.data} · ${it.horario}" }
-                                ?: "Abra a agenda para adicionar", fontSize = 12.sp, lineHeight = 16.sp, color = MarromInicio)
-                        }
-                        Spacer(Modifier.width(6.dp))
-                        IconeInicio(R.drawable.inicio_seta, null, 15)
-                    }
-                }
-                Spacer(Modifier.height(20.dp))
+
+                Spacer(Modifier.height(15.dp))
 
                 // Reserva o acesso solicitado, sem consultar localizacao ou mostrar resultados ficticios.
                 Surface(onClick = {
                     aoEncontrarCuidadores?.invoke() ?: avisar("Em breve você poderá encontrar cuidadores e abrigos na sua região.")
                 }, color = Color.White, shape = RoundedCornerShape(19.dp), border = BorderStroke(1.dp, BordaInicio)) {
                     Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(38.dp).background(Color(0xFFE1F3E8), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                            IconeInicio(R.drawable.inicio_busca, null, 20)
+                        Box(Modifier.size(50.dp), contentAlignment = Alignment.Center) {
+                            IconeInicio(R.drawable.iconabrigos, null, 50, Color.Unspecified)
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -276,10 +281,10 @@ private fun AtalhoCompactoInicio(titulo: String, icone: Int, fundo: Color, largu
     val escala by animateFloatAsState(if (pressionado) 0.96f else 1f,
         animationSpec = spring(dampingRatio = 0.7f, stiffness = 550f), label = "escalaAtalho")
     val destaque = when (icone) {
-        R.drawable.inicio_pata -> Color(0xFF8C4700)
-        R.drawable.inicio_coracao -> Color(0xFF285B2B)
-        R.drawable.inicio_recibo -> Color(0xFF943A21)
-        else -> Color(0xFF176257)
+        R.drawable.inicio_pata -> Color(0xFF432818)
+        R.drawable.inicio_coracao -> Color(0xFF432818)
+        R.drawable.inicio_recibo -> Color(0xFF432818)
+        else -> Color(0xFF432818)
     }
     Surface(onClick = acao, interactionSource = interacao,
         modifier = Modifier.width(largura).graphicsLayer { scaleX = escala; scaleY = escala },
@@ -290,7 +295,7 @@ private fun AtalhoCompactoInicio(titulo: String, icone: Int, fundo: Color, largu
                 IconeInicio(icone, null, 20, Color.White)
             }
             Spacer(Modifier.width(9.dp))
-            Text(titulo, Modifier.weight(1f), fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, color = TextoInicio)
+            Text(titulo, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFFFFFCF7))
         }
     }
 }
@@ -328,7 +333,7 @@ fun MenuInferiorInicio(
             verticalAlignment = Alignment.CenterVertically
         ) {
             ItemMenuInicio(
-                "Início", R.drawable.inicio_inicio,
+                "Início", R.drawable.iconhome,
                 selecionado == "Início", Modifier.weight(1f), aoInicio
             )
             ItemMenuInicio(
@@ -336,7 +341,7 @@ fun MenuInferiorInicio(
                 selecionado == "Loja", Modifier.weight(1f), abrirLoja
             )
             ItemMenuInicio(
-                "Animais", R.drawable.inicio_pata,
+                "Animais", R.drawable.iconanimais,
                 selecionado == "Animais", Modifier.weight(1f), aoAnimais
             )
             ItemMenuInicio(
@@ -344,7 +349,7 @@ fun MenuInferiorInicio(
                 selecionado == "Finanças", Modifier.weight(1f), abrirFinancas
             )
             ItemMenuInicio(
-                "Agenda", R.drawable.inicio_calendario,
+                "Agenda", R.drawable.iconcalendario,
                 selecionado == "Agenda", Modifier.weight(1f), aoAgenda
             )
         }
@@ -489,5 +494,366 @@ private fun PreviewInicioRefinadoFonteMaior() {
             aoAdicionar = {},
             imagemParceria = R.drawable.pedigree
         )
+    }
+}
+// Apresenta um resumo do dia sem chamar todo agendamento de urgência.
+// É um aviso dentro do aplicativo, não uma notificação do Android.
+@Composable
+private fun AvisoCuidadosHojeInicio(
+    compromissos: List<CompromissoAbrigo>,
+    hoje: String,
+    horarioAtual: String,
+    // Envia a data do próximo compromisso para a navegação.
+    aoAbrirAgenda: (String?) -> Unit
+) {
+    // Aceita apenas datas e horários válidos para comparar os agendamentos.
+    val horariosValidos = Regex("(?:[01][0-9]|2[0-3]):[0-5][0-9]")
+    // Monta uma chave ordenável com data e horário atuais.
+    val instanteAtual = chaveDataAbrigo(hoje) + horarioAtual
+
+    // Escolhe o compromisso futuro mais próximo, independentemente do mês.
+    // Não considera datas passadas como pendências sem um campo de conclusão.
+    val seguinte = compromissos
+        .filter { dataValidaAbrigo(it.data) && horariosValidos.matches(it.horario) }
+        .filter { chaveDataAbrigo(it.data) + it.horario >= instanteAtual }
+        .minByOrNull { chaveDataAbrigo(it.data) + it.horario }
+
+    // Usa um título correto para hoje ou qualquer data futura.
+    val tituloAviso = if (seguinte?.data == hoje) {
+        "Cuidados de hoje"
+    } else {
+        "Próximo compromisso"
+    }
+
+    // Mostra o nome cadastrado do compromisso.
+    val resumo = seguinte?.titulo ?: "Nenhum compromisso futuro cadastrado."
+
+    // Mostra a data exata para não confundir amanhã com próxima semana.
+    val complemento = seguinte?.let {
+        (if (it.data == hoje) "Hoje" else it.data) +
+                " · " + it.horario + " · Ver agenda"
+    } ?: "Toque para abrir a agenda"
+    // Mantém o cartão compacto com a paleta creme e marrom do aplicativo.
+    Surface(
+        // Usa a data do mesmo compromisso exibido no cartão.
+        onClick = { aoAbrirAgenda(seguinte?.data) },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = Color(0xFFE4EBDD),
+        border = BorderStroke(1.dp, Color(0xFFE8C7B8))
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.size(40.dp)
+                    .background(Color(0xFFFFFCF7), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.iconcalendario),
+                    contentDescription = null,
+                    modifier = Modifier.size(23.dp),
+                    tint = MarromInicio
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                // Destaca o título do aviso com uma fonte mais encorpada.
+                Text(
+                    text = tituloAviso,
+                    fontSize = 18.sp,
+                    lineHeight = 22.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = TextoInicio
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    resumo,
+                    fontSize = 13.sp,
+                    lineHeight = 18.sp,
+                    color = TextoInicio
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    complemento,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp,
+                    color = MarromInicio
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                painter = painterResource(R.drawable.inicio_seta),
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = MarromInicio
+            )
+        }
+    }
+}
+// TROQUE AQUI pelos nomes dos seus dois banners completos.
+// Estas imagens provisórias já existem no projeto.
+private val ImagensCarrosselInicio = listOf(
+    R.drawable.bannerinicio,
+    R.drawable.bannerpedigree
+)
+
+// Alterna automaticamente os banners sem prejudicar a prévia.
+@Composable
+private fun CarrosselAutomaticoInicio(aoAbrirParcerias: () -> Unit) {
+    // Mantém a quantidade real de banners usada pelos pontos e pelas imagens.
+    val quantidade = ImagensCarrosselInicio.size
+    // Começa no meio da sequência, alinhado ao primeiro banner real.
+    val primeiraPagina = if (quantidade > 1) {
+        val meio = Int.MAX_VALUE / 2
+        meio - meio % quantidade
+    } else 0
+    // Usa uma identidade nova para não restaurar a posição do carrossel antigo.
+    val paginas = key("circular-inicio", quantidade) {
+        rememberPagerState(
+            // Permite mostrar o banner anterior já na primeira abertura.
+            initialPage = primeiraPagina,
+            // Repete a sequência sem saltar do último ao primeiro na navegação normal.
+            pageCount = { if (quantidade > 1) Int.MAX_VALUE else 1 }
+        )
+    }
+    val arrastando by paginas.interactionSource.collectIsDraggedAsState()
+    var pausado by rememberSaveable { mutableStateOf(false) }
+    val modoPrevia = LocalInspectionMode.current
+    val escopo = rememberCoroutineScope()
+
+    // Aguarda três segundos e passa ao próximo banner com movimento suave.
+    // Arrastar pausa a troca; ao soltar, a contagem começa novamente.
+    LaunchedEffect(paginas, arrastando, pausado, modoPrevia) {
+        if (!modoPrevia && !arrastando && !pausado && ImagensCarrosselInicio.size > 1) {
+            while (true) {
+                delay(2_500)
+                if (!paginas.isScrollInProgress) {
+                    paginas.animateScrollToPage(
+                        // Avança na sequência repetida mantendo os dois vizinhos.
+                        page = paginas.currentPage + 1,
+                        animationSpec = tween(durationMillis = 600)
+                    )
+                }
+            }
+        }
+    }
+
+    Column(Modifier.fillMaxWidth()) {
+        // A altura padrão evita que o restante da tela salte a cada troca.
+        HorizontalPager(
+            // Reserva o mesmo espaço para o banner anterior e para o próximo.
+            contentPadding = PaddingValues(horizontal = if (quantidade > 1) 20.dp else 0.dp),
+            state = paginas,
+            // Define a distância entre um banner e outro.
+            pageSpacing = 12.dp,
+            modifier = Modifier.fillMaxWidth()
+        ) { paginaVirtual ->
+            // Converte a posição repetida no índice de uma imagem já existente.
+            val indice = paginaVirtual % quantidade
+            if (indice == 0) {
+                // Monta o primeiro banner com textos e botão reais.
+                BannerParceriasNativoInicio(
+                    // Abre a mesma Loja utilizada pela navegação inferior.
+                    aoAbrirLoja = aoAbrirParcerias
+                )
+            } else {
+                // Mantém a segunda arte inteira no formato padrão da loja.
+                Box(
+                    modifier = Modifier
+                        // Ocupa a largura entre as margens do conteúdo.
+                        .fillMaxWidth()
+                        // Define a proporção de referência da loja.
+                        .aspectRatio(372f / 154f)
+                        // Arredonda os cantos da arte.
+                        .clip(RoundedCornerShape(16.dp))
+                        // Preenche eventuais transparências da segunda imagem.
+                        .background(Color(0xFFFFD600))
+                ) {
+                    Image(
+                        // Usa a segunda imagem da lista do carrossel.
+                        painter = painterResource(ImagensCarrosselInicio[indice]),
+                        // Identifica a arte para leitores de tela.
+                        contentDescription = "Banner do parceiro",
+                        // Ocupa a área reservada para a imagem.
+                        modifier = Modifier.fillMaxSize(),
+                        // Mantém a imagem inteira sem deformar a arte.
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+        }
+        // Centraliza os indicadores na largura total, como no carrossel da Loja.
+        Box(
+            modifier = Modifier
+                // Usa a mesma largura do banner.
+                .fillMaxWidth()
+                // Reserva uma linha para os pontos e o controle de pausa.
+                .heightIn(min = 48.dp)
+        ) {
+            Row(
+                // Coloca o grupo de pontos exatamente no centro da linha.
+                modifier = Modifier.align(Alignment.Center),
+                // Alinha os pontos pela mesma altura.
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                ImagensCarrosselInicio.forEachIndexed { indice, _ ->
+                    // Mantém apenas um ponto para cada banner real.
+                    val ativo = paginas.currentPage % quantidade == indice
+                    Box(
+                        modifier = Modifier
+                            // Mantém uma área de toque maior que o ponto visível.
+                            .size(40.dp)
+                            .semantics {
+                                // Identifica qual banner será aberto.
+                                contentDescription = "Mostrar banner " + (indice + 1)
+                            }
+                            .clickable {
+                                // Permite selecionar um banner manualmente.
+                                escopo.launch {
+                                    // Abre a cópia próxima do banner escolhido, sem voltar ao começo da sequência.
+                                    val destino = paginas.currentPage - (paginas.currentPage % quantidade) + indice
+                                    paginas.animateScrollToPage(destino)
+                                }
+                            },
+                        // Centraliza o ponto dentro da área de toque.
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                // O ponto ativo é maior que o inativo.
+                                .size(if (ativo) 8.dp else 6.dp)
+                                // Desenha o formato circular.
+                                .clip(CircleShape)
+                                // Destaca o ponto do banner atual.
+                                .background(
+                                    if (ativo) MarromInicio
+                                    else MarromInicio.copy(alpha = 0.25f)
+                                )
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Cria o banner sem fundo, texto ou botão incorporados ao PNG.
+@Composable
+private fun BannerParceriasNativoInicio(
+    // Ação executada ao tocar em Ir para parcerias.
+    aoAbrirLoja: () -> Unit
+) {
+    // Consulta o tamanho de fonte do aparelho para evitar textos cortados.
+    val escalaFonte = LocalDensity.current.fontScale
+
+    BoxWithConstraints(
+        // Usa a mesma largura disponível para os banners da loja.
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        // Calcula a altura pela mesma proporção do banner da loja.
+        val alturaBanner = maxWidth / (372f / 154f)
+
+        Surface(
+            // Define a largura e a altura do cartão.
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(alturaBanner),
+            // Arredonda os quatro cantos do banner.
+            shape = RoundedCornerShape(16.dp),
+            // Desenha o laranja no código, sem depender de uma imagem de fundo.
+            color = Color(0xFFFFAE43)
+        ) {
+            Row(
+                // Preenche o cartão sem sobrepor texto e cachorro.
+                modifier = Modifier.fillMaxSize(),
+                // Mantém o cachorro apoiado na parte inferior do cartão.
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Column(
+                    modifier = Modifier
+                        // Reserva 60% da largura útil para o texto e o botão.
+                        .weight(0.60f)
+                        // Usa toda a altura disponível do banner.
+                        .fillMaxHeight()
+                        // Afasta o texto das bordas e mantém espaço junto à foto.
+                        .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                    // Distribui título, descrição e botão sem sobreposição.
+                    verticalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        // Título do banner, editável diretamente no Kotlin.
+                        text = "Cuidar do seu pet custa menos!",
+                        // Mantém o azul da referência do marketing.
+                        color = Color(0xFF175A91),
+                        // Define o tamanho das letras do título.
+                        fontSize = 20.sp,
+                        // Define a distância entre as duas linhas.
+                        lineHeight = 20.sp,
+                        // Deixa o título mais encorpado.
+                        fontWeight = FontWeight.ExtraBold
+                    )
+
+                    Text(
+                        // Descrição curta para não competir com o título.
+                        text = "Ofertas dos nossos parceiros\npara cuidar de quem você acolhe.",
+                        // Usa marrom para leitura sobre o laranja.
+                        color = TextoInicio,
+                        // Mantém a descrição menor que o título.
+                        fontSize = 12.sp,
+                        // Define o espaçamento das linhas da descrição.
+                        lineHeight = 12.sp
+                    )
+
+                    Button(
+                        // Redireciona para a Loja pelo destino compartilhado do app.
+                        onClick = aoAbrirLoja,
+                        modifier = Modifier
+                            // Mantém uma área confortável para tocar.
+                            .heightIn(min = 48.dp),
+                        // Arredonda o botão sem transformá-lo em uma cápsula.
+                        shape = RoundedCornerShape(12.dp),
+                        // Controla o espaço interno da legenda.
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        // Define as cores do botão e do texto.
+                        colors = ButtonDefaults.buttonColors(
+                            // Fundo azul seguindo a paleta do marketing.
+                            containerColor = Color(0xFF00A9F4),
+                            // Texto marrom para contrastar com o fundo azul.
+                            contentColor = TextoInicio
+                        )
+                    ) {
+                        Text(
+                            // Legenda da ação.
+                            text = "Ir para Loja",
+                            // Tamanho da legenda.
+                            fontSize = 11.sp,
+                            // Espaçamento vertical das linhas da legenda.
+                            lineHeight = 14.sp,
+                            // Destaca o botão com texto em negrito.
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                Image(
+                    // Usa somente o cachorro PNG que foi adicionado ao drawable.
+                    painter = painterResource(R.drawable.cachorroinicio),
+                    // A foto é decorativa; os textos já descrevem a oferta.
+                    contentDescription = null,
+                    modifier = Modifier
+                        // Reserva 40% da largura para o cachorro.
+                        .weight(0.40f)
+                        // Permite que a foto use a altura inteira.
+                        .fillMaxHeight(),
+                    // Preserva as proporções do cachorro sem esticar ou cortar.
+                    contentScale = ContentScale.Fit,
+                    // Encosta a base da imagem na base do banner.
+                    alignment = Alignment.BottomEnd
+                )
+            }
+        }
     }
 }

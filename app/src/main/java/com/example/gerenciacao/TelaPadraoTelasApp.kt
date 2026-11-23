@@ -32,6 +32,8 @@ import androidx.compose.ui.tooling.preview.Preview
 
 // Uma unica origem para as cores, margens e medidas do cabecalho de todas as telas internas.
 internal val LaranjaPadraoApp = Color(0xFFFFAE49)
+// Permite que uma tela use outra cor, mantendo o laranja como padrão.
+val LocalCorCabecalhoApp = staticCompositionLocalOf { LaranjaPadraoApp }
 internal val FundoPadraoApp = Color(0xFFFFFCF7)
 internal val TextoPadraoApp = Color(0xFF38291F)
 internal val MarromPadraoApp = Color(0xFF783E19)
@@ -65,7 +67,7 @@ fun CabecalhoPadraoApp(interceptarNavegacao: (() -> Unit) -> Unit = { it() }) {
     var confirmarSaida by rememberSaveable { mutableStateOf(false) }
     var aviso by rememberSaveable { mutableStateOf<String?>(null) }
     val executar: (() -> Unit) -> Unit = { acao -> menu = false; interceptarNavegacao(acao) }
-    Row(Modifier.fillMaxWidth().background(LaranjaPadraoApp).statusBarsPadding()
+    Row(Modifier.fillMaxWidth().background(LocalCorCabecalhoApp.current).statusBarsPadding()
         .padding(horizontal = 22.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(48.dp).clip(CircleShape).background(CremePadraoApp)
             .semantics { contentDescription = "Abrir perfil de ${dados.nome}" }
@@ -106,22 +108,44 @@ fun CabecalhoPadraoApp(interceptarNavegacao: (() -> Unit) -> Unit = { it() }) {
         }
         Spacer(Modifier.width(6.dp))
         Box {
-            IconButton(onClick = { menu = true }, modifier = Modifier.size(48.dp)
-                .semantics { contentDescription = "Abrir menu" }) {
+            IconButton(
+                onClick = { menu = true }, modifier = Modifier.size(48.dp)
+                    .semantics { contentDescription = "Abrir menu" }) {
                 Canvas(Modifier.size(24.dp)) {
-                    listOf(0.23f, 0.5f, 0.77f).forEach { y -> drawCircle(MarromPadraoApp, 2.dp.toPx(), Offset(size.width / 2, size.height * y)) }
+                    listOf(0.23f, 0.5f, 0.77f).forEach { y ->
+                        drawCircle(
+                            MarromPadraoApp,
+                            2.dp.toPx(),
+                            Offset(size.width / 2, size.height * y)
+                        )
+                    }
                 }
             }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Meu perfil") }, onClick = { executar(dados.aoPerfil) })
-                DropdownMenuItem(text = { Text("Notificações") }, onClick = {
-                    menu = false
-                    val abrir = dados.aoNotificacoes
-                    if (abrir != null) executar(abrir) else aviso = "A tela de notificações será incluída em breve."
-                })
-                DropdownMenuItem(text = { Text("Parcerias") }, onClick = { executar(dados.aoParcerias) })
+            DropdownMenu(
+                // Mostra o menu quando os três pontos são pressionados.
+                expanded = menu,
+                // Fecha o menu ao tocar fora.
+                onDismissRequest = { menu = false }
+            ) {
+                DropdownMenuItem(
+                    // Mantém o acesso ao perfil e às configurações.
+                    text = { Text("Meu perfil") },
+                    // Abre o perfil da pessoa conectada.
+                    onClick = { executar(dados.aoPerfil) }
+                )
+
+                // Separa o perfil da opção de saída.
                 HorizontalDivider()
-                DropdownMenuItem(text = { Text("Sair da conta") }, onClick = { menu = false; confirmarSaida = true })
+
+                DropdownMenuItem(
+                    // Mantém a opção de sair.
+                    text = { Text("Sair da conta") },
+                    // Fecha o menu e solicita confirmação.
+                    onClick = {
+                        menu = false
+                        confirmarSaida = true
+                    }
+                )
             }
         }
     }
@@ -157,7 +181,8 @@ fun MolduraPadraoApp(
     // Posiciona o mais sobre o conteúdo, acima da barra, sem criar uma faixa extra.
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        containerColor = LaranjaPadraoApp,
+        // Aplica a mesma cor ao fundo atrás dos cantos arredondados.
+        containerColor = LocalCorCabecalhoApp.current,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         topBar = { CabecalhoPadraoApp(interceptarCabecalho) },
         bottomBar = bottomBar,

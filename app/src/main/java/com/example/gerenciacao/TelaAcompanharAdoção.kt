@@ -39,11 +39,11 @@ fun proximaAcaoAdocao(etapa: EtapaAdocao): String = when (etapa) {
     EtapaAdocao.ACOMPANHAMENTO -> "Acompanhe a adaptação no novo lar."
 }
 
-// A mesma tela recebe o processo e o animal escolhidos, sem fixar o nome Lua.
+// Usa a mesma estrutura para qualquer ficha, com ou sem processo de adoção.
 @Composable
 fun TelaAcompanharAdocao(
     animal: AnimalExemplo,
-    processo: ProcessoAdocao,
+    processo: ProcessoAdocao?,
     aoVoltar: () -> Unit,
     aoInicio: () -> Unit,
     aoAnimais: () -> Unit,
@@ -54,9 +54,11 @@ fun TelaAcompanharAdocao(
     aoConfirmarAdocao: () -> Unit
 ) {
     // Os dialogos pertencem a este processo e sobrevivem a rotacao.
-    var escolherEtapa by rememberSaveable(processo.id) { mutableStateOf(false) }
-    var confirmarAdocao by rememberSaveable(processo.id) { mutableStateOf(false) }
+    var escolherEtapa by rememberSaveable(animal.id, processo?.id) { mutableStateOf(false) }
+    var confirmarAdocao by rememberSaveable(animal.id, processo?.id) { mutableStateOf(false) }
     var aviso by rememberSaveable { mutableStateOf<String?>(null) }
+    // Só permite modificar etapas quando existe um processo deste animal.
+    val temProcesso = processo != null
     val adotado = animal.situacao == "Adotado"
     val foto = fotoMiniaturaAdocao(animal.fotoUri)
     val etapas = EtapaAdocao.values().toList()
@@ -73,7 +75,7 @@ fun TelaAcompanharAdocao(
             Column(Modifier.fillMaxSize().padding(espacos).verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
-                TituloPaginaPadrao("Adoção do bichinho", aoVoltar)
+                TituloPaginaPadrao("Status do pet", aoVoltar)
 
                 // A foto e os dados vem da ficha atualizada, inclusive depois da edicao.
                 Surface(color = Color.White, shape = RoundedCornerShape(20.dp),
@@ -99,8 +101,8 @@ fun TelaAcompanharAdocao(
                 // Representa a progressao atual, sem inventar datas ou registros de etapas passadas.
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     etapas.forEachIndexed { indice, etapa ->
-                        LinhaEtapaAdocao(etapa, indice < processo.etapa.ordinal,
-                            etapa == processo.etapa, indice != etapas.lastIndex)
+                        LinhaEtapaAdocao(etapa, indice < (processo?.etapa?.ordinal ?: -1),
+                            etapa == processo?.etapa, indice != etapas.lastIndex)
                     }
                 }
 
@@ -110,20 +112,24 @@ fun TelaAcompanharAdocao(
                             Text("Próxima ação", Modifier.fillMaxWidth().padding(14.dp), fontWeight = FontWeight.Bold,
                                 color = MarromAcompanhamento, fontSize = 18.sp)
                         }
-                        Text(processo.proximaAcao, color = TextoAcompanhamento, fontSize = 15.sp)
-                        Text(processo.pessoa, color = MarromAcompanhamento, fontSize = 13.sp)
+                        Text(processo?.proximaAcao ?: "Nenhuma adoção iniciada para este animal.", color = TextoAcompanhamento, fontSize = 15.sp)
+                        Text(processo?.pessoa ?: "Pessoa interessada: --", color = MarromAcompanhamento, fontSize = 13.sp)
                         // A mudanca de etapa atualiza a colecao compartilhada e os filtros da lista.
-                        Button(onClick = { escolherEtapa = true }, enabled = !adotado,
+                        Button(onClick = { escolherEtapa = true }, enabled = temProcesso && !adotado,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = LaranjaAcompanhamento, contentColor = TextoAcompanhamento)) {
                             Text(if (adotado) "Em acompanhamento" else "Alterar etapa", fontWeight = FontWeight.Bold)
                         }
-                        OutlinedButton(onClick = { confirmarAdocao = true }, enabled = !adotado,
+                        OutlinedButton(onClick = { confirmarAdocao = true }, enabled = temProcesso && !adotado,
                             modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp), shape = RoundedCornerShape(14.dp),
                             border = BorderStroke(1.dp, BordaAcompanhamento)) {
                             Text(if (adotado) "Adoção confirmada" else "Marcar como adotado", color = MarromAcompanhamento)
                         }
-                        Text(if (adotado) "Continue acompanhando a adaptação no novo lar." else "Confirme a adoção antes de atualizar a ficha.",
+                        Text(when {
+                            !temProcesso -> "As etapas serão preenchidas quando houver um processo de adoção."
+                            adotado -> "Continue acompanhando a adaptação no novo lar."
+                            else -> "Confirme a adoção antes de atualizar a ficha."
+                        },
                             fontSize = 12.sp, color = MarromAcompanhamento)
                         TextButton(onClick = aoVerFicha, modifier = Modifier.fillMaxWidth()) { Text("Ver ficha do bichinho", color = MarromAcompanhamento) }
                     }
@@ -134,7 +140,7 @@ fun TelaAcompanharAdocao(
     }
 
     // Permite corrigir etapas anteriores; acompanhamento exige confirmar a adocao.
-    if (escolherEtapa) AlertDialog(onDismissRequest = { escolherEtapa = false },
+    if (escolherEtapa && temProcesso) AlertDialog(onDismissRequest = { escolherEtapa = false },
         title = { Text("Alterar etapa") },
         text = {
             Column {
@@ -144,14 +150,14 @@ fun TelaAcompanharAdocao(
                         if (etapa == EtapaAdocao.ACOMPANHAMENTO && !adotado) confirmarAdocao = true
                         else aoAlterarEtapa(etapa)
                     }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (etapa == processo.etapa) "${etapa.titulo} · atual" else etapa.titulo,
+                        Text(if (etapa == processo?.etapa) "${etapa.titulo} · atual" else etapa.titulo,
                             Modifier.fillMaxWidth(), color = MarromAcompanhamento)
                     }
                 }
             }
         }, confirmButton = { TextButton(onClick = { escolherEtapa = false }) { Text("Cancelar") } }, containerColor = FundoAcompanhamento)
     // Uma confirmacao explicita atualiza o animal e seu processo ao mesmo tempo.
-    if (confirmarAdocao) AlertDialog(onDismissRequest = { confirmarAdocao = false },
+    if (confirmarAdocao && temProcesso) AlertDialog(onDismissRequest = { confirmarAdocao = false },
         title = { Text("Confirmar adoção de ${animal.nome}?") },
         text = { Text("A ficha será marcada como Adotado e o processo passará para Acompanhamento. Confirme somente depois da adoção realizada.") },
         confirmButton = { TextButton(onClick = { confirmarAdocao = false; aoConfirmarAdocao() }) { Text("Confirmar adoção", color = MarromAcompanhamento) } },

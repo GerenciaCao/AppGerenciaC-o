@@ -26,12 +26,66 @@ data class OfertaAbrigo(val id: String = UUID.randomUUID().toString(), val titul
                         val categoria: String, val parceiro: String, val descricao: String, val link: String = "",
                         val tipo: String = "Produto", val centavos: Long? = null, val imagemUri: String? = null) : Serializable
 
-// Os cargos abaixo servem apenas a demonstracao local, sem autenticar usuarios.
-enum class FuncaoAbrigo(val titulo: String) { ADMIN("Administrador"), CUIDADOR("Cuidador"), VOLUNTARIO("Voluntário") }
-data class MembroAbrigo(val id: String, val nome: String, val funcao: FuncaoAbrigo) : Serializable
+// Define os cargos disponíveis no cadastro, na edição e nos filtros da equipe.
+enum class FuncaoAbrigo(val titulo: String) {
+    // Administração do abrigo.
+    ADMIN("Administrador"),
+    // Gestão das atividades do abrigo.
+    GESTOR("Gestor"),
+    // Cuidados diários dos animais.
+    CUIDADOR("Cuidador"),
+    // Atendimento veterinário.
+    VETERINARIO("Veterinário"),
+    // Treinamento e comportamento dos animais.
+    ADESTRADOR("Adestrador"),
+    // Colaboração nas atividades autorizadas.
+    VOLUNTARIO("Voluntário")
+}
+
+// Guarda os dados do integrante e preserva os cadastros antigos com valores padrão.
+data class MembroAbrigo(
+    // Identifica o membro na lista e nas permissões.
+    val id: String,
+    // Guarda o nome completo exibido na equipe.
+    val nome: String,
+    // Define a função do integrante no abrigo.
+    val funcao: FuncaoAbrigo,
+    // Preserva o sobrenome informado no cadastro.
+    val sobrenome: String = "",
+    // Guarda o e-mail de contato do integrante.
+    val email: String = "",
+    // Guarda o telefone, quando informado.
+    val telefone: String = "",
+    // Guarda o endereço, quando informado.
+    val endereco: String = "",
+    // Guarda o endereço da fotografia selecionada no aparelho.
+    val fotoUri: String? = null
+) : Serializable
+
 data class ConviteAbrigo(val id: String, val email: String, val funcao: FuncaoAbrigo, val codigo: String) : Serializable
-data class InformacoesAbrigo(val nome: String = "Abrigo Esperança", val telefone: String = "",
-                             val redeSocial: String = "", val capacidade: Int = 60) : Serializable
+// Guarda o perfil do próprio abrigo sem alterar a ordem dos campos antigos.
+data class InformacoesAbrigo(
+    // Identifica o abrigo no aplicativo.
+    val nome: String = "Abrigo Esperança",
+    // Guarda o telefone cadastrado.
+    val telefone: String = "",
+    // Guarda a rede social informada.
+    val redeSocial: String = "",
+    // Define a capacidade usada no cálculo de vagas.
+    val capacidade: Int = 60,
+    // Guarda a apresentação do abrigo.
+    val descricao: String = "",
+    // Identifica o bairro.
+    val bairro: String = "",
+    // Guarda a cidade e o estado informados.
+    val cidade: String = "",
+    // Guarda o endereço de contato.
+    val endereco: String = "",
+    // Guarda o e-mail do abrigo.
+    val email: String = "",
+    // Guarda a foto escolhida para a capa.
+    val fotoUri: String? = null
+) : Serializable
 
 // Uma unica colecao compartilhada mantem todas as novas telas coerentes durante a sessao.
 data class DadosRestantes(

@@ -216,60 +216,75 @@ fun TelaFinancas(
 
                 .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)) {
 
-                // Posiciona notificacoes a esquerda e o perfil a direita, sem logo no topo.
-
-                // Foto e menu agora sao apresentados pelo cabecalho compartilhado.
-
-                Spacer(Modifier.height(22.dp))
-
-                // Mantem o seletor abaixo do titulo para caber em celulares menores.
-
-                TituloPaginaPadrao("Finanças")
-
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-
-                    horizontalArrangement = Arrangement.SpaceBetween) {
-
-                    Text("Visão do abrigo", fontSize = 13.sp, color = SecundarioFin)
-
+                // Alinha o título e o seletor acima do resultado do mês.
+                Row(
+                    modifier = Modifier
+                        // Usa a largura entre as margens padrão de 22 dp.
+                        .fillMaxWidth()
+                        // Repete a altura mínima dos títulos de Animais e Loja.
+                        .heightIn(min = 48.dp),
+                    // Centraliza o título e o seletor na mesma linha.
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        // Título da aba principal, sem seta.
+                        text = "Finanças",
+                        modifier = Modifier
+                            // Reserva o espaço restante para o título.
+                            .weight(1f),
+                        // Repete o tamanho do título de Animais e Parcerias.
+                        fontSize = 30.sp,
+                        // Repete a altura de linha do padrão.
+                        lineHeight = 34.sp,
+                        // Destaca o título com o mesmo peso.
+                        fontWeight = FontWeight.Bold,
+                        // Mantém a cor principal do texto do aplicativo.
+                        color = TextoPadraoApp
+                    )
                     Box {
-
-                        TextButton(onClick = { escolherMes = true }) {
-
-                            Text("${meses[mes]} $ano ▾", fontSize = 13.sp, color = MarromFin)
-
+                        TextButton(
+                            // Abre a lista de meses.
+                            onClick = { escolherMes = true },
+                            // Mantém espaço suficiente para tocar.
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            // Evita afastar o seletor da borda direita.
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            Text(
+                                // Mostra o período selecionado.
+                                text = meses[mes] + " " + ano + " ▾",
+                                // Mantém o período secundário em relação ao título.
+                                fontSize = 13.sp,
+                                // Usa o marrom do financeiro.
+                                color = MarromFin
+                            )
                         }
-
-                        DropdownMenu(expanded = escolherMes, onDismissRequest = { escolherMes = false }) {
-
+                        DropdownMenu(
+                            // Exibe o menu quando o seletor é acionado.
+                            expanded = escolherMes,
+                            // Fecha o menu ao tocar fora.
+                            onDismissRequest = { escolherMes = false }
+                        ) {
                             meses.forEachIndexed { indice, nome ->
-
-                                DropdownMenuItem(text = { Text("$nome $ano") }, onClick = {
-
-                                    mes = indice
-
-                                    filtro = "Tudo"
-
-                                    escolherMes = false
-
-                                })
-
+                                DropdownMenuItem(
+                                    text = {
+                                        // Identifica mês e ano de cada opção.
+                                        Text(nome + " " + ano)
+                                    },
+                                    onClick = {
+                                        // Atualiza o mês e limpa o filtro de movimentos.
+                                        mes = indice
+                                        filtro = "Tudo"
+                                        escolherMes = false
+                                    }
+                                )
                             }
-
                         }
-
                     }
-
                 }
 
-                Row {
-                    TextButton(onClick = { ano--; filtro = "Tudo" }) { Text("‹ Ano anterior", color = MarromFin) }
-                    TextButton(onClick = { ano++; filtro = "Tudo" }) { Text("Próximo ano ›", color = MarromFin) }
-                }
-                Text("Registros locais · inclui exemplos iniciais", fontSize = 11.sp, color = SecundarioFin)
-
-                Spacer(Modifier.height(18.dp))
-
+                // Usa o mesmo respiro de 24 dp antes do primeiro bloco.
+                Spacer(Modifier.height(24.dp))
                 // Resultado do periodo nao representa saldo bancario nem inclui produtos.
 
                 Surface(shape = RoundedCornerShape(22.dp), color = Color.White,
@@ -316,7 +331,47 @@ fun TelaFinancas(
 
                 }
 
-                Spacer(Modifier.height(20.dp))
+                // Posiciona os controles de ano abaixo do resultado mensal.
+                Row(
+                    // Usa a mesma largura do cartão.
+                    modifier = Modifier.fillMaxWidth(),
+                    // Distribui os controles nas extremidades.
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    // Mantém ambos na mesma altura.
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = {
+                        // Mantém o mês selecionado e volta um ano.
+                        ano--
+                        filtro = "Tudo"
+                    }) {
+                        Text(
+                            // Nome da ação.
+                            text = "‹ Ano anterior",
+                            // Tamanho secundário de texto.
+                            fontSize = 12.sp,
+                            // Cor do controle.
+                            color = MarromFin
+                        )
+                    }
+                    TextButton(onClick = {
+                        // Mantém o mês selecionado e avança um ano.
+                        ano++
+                        filtro = "Tudo"
+                    }) {
+                        Text(
+                            // Nome da ação.
+                            text = "Próximo ano ›",
+                            // Tamanho secundário de texto.
+                            fontSize = 12.sp,
+                            // Cor do controle.
+                            color = MarromFin
+                        )
+                    }
+                }
+
+                // Separa a navegação do período dos atalhos financeiros.
+                Spacer(Modifier.height(12.dp))
 
                 // Atalhos preservam pontos de integracao para as proximas telas.
 
@@ -600,18 +655,31 @@ private fun Modifier.semanticsDescricaoFin(descricao: String): Modifier =
 
     this.then(Modifier.semantics { contentDescription = descricao })
 
-// Permite visualizar o financeiro no editor sem conectar banco de dados.
-
-@Preview(showBackground = true, showSystemUi = true)
-
+// Mostra o financeiro sem saudação, como nas demais abas internas.
+@Preview(
+    // Identifica a prévia no painel.
+    name = "Finanças — alinhamento padrão",
+    // Mostra o fundo da tela.
+    showBackground = true,
+    // Define a largura de referência.
+    widthDp = 412,
+    // Define a altura de referência.
+    heightDp = 917
+)
 @Composable
-
 private fun PreviewTelaFinancas() {
-
     MaterialTheme {
-
-        TelaFinancas(aoInicio = {}, aoAnimais = {}, aoAdicionar = {}, aoAgenda = {})
-
+        CompositionLocalProvider(
+            // Oculta a saudação apenas nesta prévia de tela interna.
+            LocalCabecalhoApp provides DadosCabecalhoApp(mostrarSaudacao = false)
+        ) {
+            TelaFinancas(
+                // Ações vazias permitem visualizar sem navegar.
+                aoInicio = {},
+                aoAnimais = {},
+                aoAdicionar = {},
+                aoAgenda = {}
+            )
+        }
     }
-
 }

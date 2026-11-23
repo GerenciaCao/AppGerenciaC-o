@@ -89,12 +89,6 @@ fun TelaInformacoesAbrigo(ctx: ContextoAbrigo, abrigo: AbrigoRede?, conectado: B
                         }
                         TextButton(onClick = { confirmarRemocao = true }) { Text("Remover conexão", color = MarromRestante) }
                     } else BotaoRestante("Conectar-se") { aoDefinirConexao(true) }
-                    Text("Conexão demonstrativa, salva nesta sessão. Nenhuma solicitação ou mensagem é enviada ao abrigo.",
-                        fontSize = 11.sp, lineHeight = 16.sp, color = MarromRestante)
-                }
-                item {
-                    Text("Perfil, contatos, equipe e distâncias são exemplos. Os e-mails .example não são endereços reais de atendimento.",
-                        fontSize = 11.sp, lineHeight = 16.sp, color = MarromRestante)
                 }
             }
         }
