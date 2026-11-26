@@ -137,9 +137,17 @@ fun TelaFinancas(
 
     // Preserva filtros, periodo e visibilidade ao recriar a tela.
 
-    var mes by rememberSaveable { mutableIntStateOf(10) }
+    // Consulta o mês e o ano atuais do aparelho.
+    val calendarioAtual = java.util.Calendar.getInstance()
 
-    var ano by rememberSaveable { mutableIntStateOf(2026) }
+// Mantém o período escolhido durante a navegação.
+// Calendar usa Janeiro = 0, assim como esta tela.
+    var mes by rememberSaveable {
+        mutableIntStateOf(calendarioAtual.get(java.util.Calendar.MONTH))
+    }
+    var ano by rememberSaveable {
+        mutableIntStateOf(calendarioAtual.get(java.util.Calendar.YEAR))
+    }
     var filtro by rememberSaveable { mutableStateOf("Tudo") }
 
     var ocultar by rememberSaveable { mutableStateOf(false) }
@@ -157,7 +165,13 @@ fun TelaFinancas(
     // A mesma fonte alimenta os formularios, o resumo e o relatorio.
     val periodo = lancamentos.filter { doPeriodoAbrigo(it.data, mes + 1, ano) }
     val movimentos = periodo.sortedByDescending { chaveDataAbrigo(it.data) }.map {
-        MovimentoFin(it.descricao, "${it.data} · ${it.categoria.ifBlank { it.natureza.name.lowercase() }}",
+        MovimentoFin(
+            it.descricao,
+            listOfNotNull(
+                it.data,
+                it.horario.takeIf { hora -> hora.isNotBlank() },
+                it.categoria.ifBlank { it.natureza.name.lowercase() }
+            ).joinToString(" · "),
             if (it.natureza == NaturezaAbrigo.DESPESA) "Despesas" else "Doações",
             centavos = if (it.natureza == NaturezaAbrigo.DINHEIRO || it.natureza == NaturezaAbrigo.DESPESA) it.centavos else null,
             quantidade = if (it.natureza == NaturezaAbrigo.PRODUTOS || it.natureza == NaturezaAbrigo.BICHINHO) it.quantidade else null)
@@ -216,69 +230,58 @@ fun TelaFinancas(
 
                 .padding(horizontal = 22.dp).padding(top = 22.dp, bottom = 28.dp)) {
 
-                // Alinha o título e o seletor acima do resultado do mês.
+
+// Mantém o registro de movimentações ao lado do título.
                 Row(
                     modifier = Modifier
-                        // Usa a largura entre as margens padrão de 22 dp.
                         .fillMaxWidth()
-                        // Repete a altura mínima dos títulos de Animais e Loja.
                         .heightIn(min = 48.dp),
-                    // Centraliza o título e o seletor na mesma linha.
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        // Título da aba principal, sem seta.
                         text = "Finanças",
-                        modifier = Modifier
-                            // Reserva o espaço restante para o título.
-                            .weight(1f),
-                        // Repete o tamanho do título de Animais e Parcerias.
+                        modifier = Modifier.weight(1f),
                         fontSize = 30.sp,
-                        // Repete a altura de linha do padrão.
                         lineHeight = 34.sp,
-                        // Destaca o título com o mesmo peso.
                         fontWeight = FontWeight.Bold,
-                        // Mantém a cor principal do texto do aplicativo.
                         color = TextoPadraoApp
                     )
-                    Box {
-                        TextButton(
-                            // Abre a lista de meses.
-                            onClick = { escolherMes = true },
-                            // Mantém espaço suficiente para tocar.
-                            modifier = Modifier.heightIn(min = 48.dp),
-                            // Evita afastar o seletor da borda direita.
-                            contentPadding = PaddingValues(horizontal = 4.dp)
-                        ) {
-                            Text(
-                                // Mostra o período selecionado.
-                                text = meses[mes] + " " + ano + " ▾",
-                                // Mantém o período secundário em relação ao título.
-                                fontSize = 13.sp,
-                                // Usa o marrom do financeiro.
-                                color = MarromFin
+
+                    BotaoAcaoTitulo(
+                        texto = "Registrar",
+                        aoClicar = aoAdicionar
+                    )
+
+                }
+
+                Spacer(Modifier.height(12.dp))
+
+// Preserva a escolha do período junto ao resumo financeiro.
+                Box {
+                    TextButton(
+                        onClick = { escolherMes = true },
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            text = meses[mes] + " " + ano + " ▾",
+                            fontSize = 16.sp,
+                            color = MarromFin
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = escolherMes,
+                        onDismissRequest = { escolherMes = false }
+                    ) {
+                        meses.forEachIndexed { indice, nome ->
+                            DropdownMenuItem(
+                                text = { Text("$nome $ano") },
+                                onClick = {
+                                    mes = indice
+                                    filtro = "Tudo"
+                                    escolherMes = false
+                                }
                             )
-                        }
-                        DropdownMenu(
-                            // Exibe o menu quando o seletor é acionado.
-                            expanded = escolherMes,
-                            // Fecha o menu ao tocar fora.
-                            onDismissRequest = { escolherMes = false }
-                        ) {
-                            meses.forEachIndexed { indice, nome ->
-                                DropdownMenuItem(
-                                    text = {
-                                        // Identifica mês e ano de cada opção.
-                                        Text(nome + " " + ano)
-                                    },
-                                    onClick = {
-                                        // Atualiza o mês e limpa o filtro de movimentos.
-                                        mes = indice
-                                        filtro = "Tudo"
-                                        escolherMes = false
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -331,105 +334,73 @@ fun TelaFinancas(
 
                 }
 
-                // Posiciona os controles de ano abaixo do resultado mensal.
+                // Navega entre meses e permite retornar ao mês atual.
                 Row(
-                    // Usa a mesma largura do cartão.
                     modifier = Modifier.fillMaxWidth(),
-                    // Distribui os controles nas extremidades.
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    // Mantém ambos na mesma altura.
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    TextButton(onClick = {
-                        // Mantém o mês selecionado e volta um ano.
-                        ano--
-                        filtro = "Tudo"
-                    }) {
+                    TextButton(
+                        onClick = {
+                            // Janeiro volta para dezembro do ano anterior.
+                            if (mes == 0) {
+                                mes = 11
+                                ano--
+                            } else {
+                                mes--
+                            }
+                            filtro = "Tudo"
+                        },
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
                         Text(
-                            // Nome da ação.
-                            text = "‹ Ano anterior",
-                            // Tamanho secundário de texto.
-                            fontSize = 12.sp,
-                            // Cor do controle.
+                            text = "‹ Mês anterior",
+                            fontSize = 13.sp,
                             color = MarromFin
                         )
                     }
-                    TextButton(onClick = {
-                        // Mantém o mês selecionado e avança um ano.
-                        ano++
-                        filtro = "Tudo"
-                    }) {
+
+                    TextButton(
+                        onClick = {
+                            // Retorna diretamente ao mês atual, mesmo após vários avanços.
+                            val hoje = java.util.Calendar.getInstance()
+                            mes = hoje.get(java.util.Calendar.MONTH)
+                            ano = hoje.get(java.util.Calendar.YEAR)
+                            filtro = "Tudo"
+                        },
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
                         Text(
-                            // Nome da ação.
-                            text = "Próximo ano ›",
-                            // Tamanho secundário de texto.
-                            fontSize = 12.sp,
-                            // Cor do controle.
+                            text = "Atual",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MarromFin
+                        )
+                    }
+
+                    TextButton(
+                        onClick = {
+                            // Dezembro avança para janeiro do ano seguinte.
+                            if (mes == 11) {
+                                mes = 0
+                                ano++
+                            } else {
+                                mes++
+                            }
+                            filtro = "Tudo"
+                        },
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        Text(
+                            text = "Mês seguinte ›",
+                            fontSize = 13.sp,
                             color = MarromFin
                         )
                     }
                 }
 
-                // Separa a navegação do período dos atalhos financeiros.
-                Spacer(Modifier.height(12.dp))
-
-                // Atalhos preservam pontos de integracao para as proximas telas.
-
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-
-                    AtalhoFin("Registrar\ndoação", R.drawable.adicionar_doacao, CremeFin, Modifier.weight(1f)) {
-
-                        aoRegistrarDoacao?.invoke() ?: informar("Registrar doação", "O formulário de doações ainda será criado.")
-
-                    }
-
-                    AtalhoFin("Registrar\ndespesa", R.drawable.inicio_recibo, PessegoFin, Modifier.weight(1f)) {
-
-                        aoRegistrarDespesa?.invoke() ?: informar("Registrar despesa", "O formulário de despesas ainda será criado.")
-
-                    }
-
-                    AtalhoFin("Relatórios", R.drawable.inicio_carteira, CremeFin, Modifier.weight(1f)) {
-
-                        aoRelatorios?.invoke() ?: informar("Relatórios", "A tela de relatórios ainda será criada.")
-
-                    }
-
-                }
-
-                Spacer(Modifier.height(20.dp))
-
-                // Mantem quantidades recebidas separadas do resumo em reais.
-
-                Surface(onClick = {
-
-                    informar("Doações em produtos", if (produtos.isEmpty()) "Nenhum produto recebido neste período." else produtos.joinToString("\n") { "${it.descricao}: ${it.quantidade}" } + "\n\nProdutos não entram nos totais em dinheiro.")
-
-                }, shape = RoundedCornerShape(18.dp), color = VerdeClaroFin) {
-
-                    Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-
-                        IconFin(R.drawable.adicionar_doacao, null, VerdeFin)
-
-                        Spacer(Modifier.width(12.dp))
-
-                        Column(Modifier.weight(1f)) {
-
-                            Text("Doações em produtos", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = TextoFin)
-
-                            Text(if (ocultar) "••••" else if (produtos.isEmpty()) "Nenhum recebimento" else "${produtos.size} ${if (produtos.size == 1) "registro recebido" else "registros recebidos"}",
-
-                                fontSize = 12.sp, lineHeight = 18.sp, color = SecundarioFin)
-
-                        }
-
-                        IconFin(R.drawable.inicio_seta, null)
-
-                    }
-
-                }
-
-                Spacer(Modifier.height(22.dp))
+                // Separa o resumo financeiro da lista de movimentações.
+                Spacer(Modifier.height(24.dp))
 
                 // O historico abaixo e um recorte do periodo, nao a soma de todos os lancamentos do mes.
 

@@ -32,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.collect
+
 // GERENCIACÃO — NOVO PROJETO
 // Splash Screen reaproveitada do projeto original.
 
@@ -78,9 +82,67 @@ class MainActivity : ComponentActivity() {
                 // Obtém o contexto para localizar as fotos do drawable deste aplicativo.
                 val contextoDemonstracao = androidx.compose.ui.platform.LocalContext.current
 
-                // Carrega os exemplos uma vez e mantém os cadastros editáveis durante a sessão.
+                // Consulta o arquivo local antes de iniciar os exemplos.
+                val cargaFichas = remember(contextoDemonstracao) {
+                    runCatching { carregarFichasLocais(contextoDemonstracao) }
+                }
+
                 var animais by rememberSaveable {
-                    mutableStateOf(criarAnimaisDemonstracao(contextoDemonstracao))
+                    mutableStateOf(
+                        prepararArquivosAnimais(
+                            cargaFichas.getOrNull()
+                                ?: criarAnimaisDemonstracao(contextoDemonstracao)
+                        )
+                    )
+                }
+
+// Compartilha o horário usado na lista de arquivadas.
+                var agoraArquivos by remember {
+                    mutableStateOf(System.currentTimeMillis())
+                }
+
+                var avisoArquivo by remember {
+                    mutableStateOf<String?>(null)
+                }
+
+// Reavalia o prazo ao abrir e a cada minuto enquanto o app estiver aberto.
+                LaunchedEffect(Unit) {
+                    while (true) {
+                        agoraArquivos = System.currentTimeMillis()
+                        val atualizados = prepararArquivosAnimais(animais, agoraArquivos)
+
+                        if (atualizados != animais) {
+                            animais = atualizados
+                        }
+
+                        delay(60_000L)
+                    }
+                }
+
+// Grava as mudanças em sequência, fora da interface.
+                LaunchedEffect(Unit) {
+                    if (cargaFichas.isFailure) {
+                        // Evita sobrescrever um arquivo existente que não pôde ser lido.
+                        avisoArquivo = "Não foi possível carregar as fichas salvas. Nesta sessão, as alterações não serão gravadas no aparelho."
+                    } else {
+                        snapshotFlow { animais.toList() }.collect { lista ->
+                            val resultado = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    salvarFichasLocais(contextoDemonstracao, lista)
+                                }
+                            }
+
+                            if (resultado.isFailure) {
+                                avisoArquivo = "Não foi possível salvar as fichas no aparelho. Verifique o espaço disponível."
+                            }
+                        }
+                    }
+                }
+
+                avisoArquivo?.let { mensagem ->
+                    MensagemRestante(mensagem) {
+                        avisoArquivo = null
+                    }
                 }
 
                 // Cria os exemplos uma vez e mantem seus vinculos por ID durante a sessao.
@@ -98,6 +160,8 @@ class MainActivity : ComponentActivity() {
                 // Lembra o processo e as origens para os botoes Voltar.
                 var processoSelecionadoId by rememberSaveable { mutableStateOf<String?>(null) }
                 var origemAcompanhamento by rememberSaveable { mutableStateOf("adocoes") }
+                // Permite voltar à ficha quando Adoções for aberta por ela.
+                var origemAdocoes by rememberSaveable { mutableStateOf("animais") }
                 var origemFicha by rememberSaveable { mutableStateOf("animais") }
                 val estadoLista = rememberSaveableStateHolder()
                 // A rede de conexoes e separada da equipe e das permissoes do proprio abrigo.
@@ -116,6 +180,28 @@ class MainActivity : ComponentActivity() {
                         )
                     )
                 }
+
+                // Atualiza somente os títulos antigos dos lançamentos demonstrativos.
+                LaunchedEffect(Unit) {
+                    dadosRestantes = dadosRestantes.copy(
+                        lancamentos = dadosRestantes.lancamentos.map { registro ->
+                            when {
+                                registro.natureza == NaturezaAbrigo.DINHEIRO &&
+                                        Regex("Doação de exemplo [0-9]+")
+                                            .matches(registro.descricao) ->
+                                    registro.copy(descricao = "Doação")
+
+                                registro.natureza == NaturezaAbrigo.DESPESA &&
+                                        Regex("Despesa de exemplo [0-9]+")
+                                            .matches(registro.descricao) ->
+                                    registro.copy(descricao = "Despesa de ração")
+
+                                else -> registro
+                            }
+                        }
+                    )
+                }
+
 
                 var pilhaRestante by rememberSaveable { mutableStateOf(arrayListOf<String>()) }
                 // Acrescenta o exemplo também quando o Android restaura dados de uma execução anterior.
@@ -273,6 +359,17 @@ class MainActivity : ComponentActivity() {
                             // Abre a Loja atual pelo banner do Início.
                             aoAbrirParcerias = { telaAtual = "loja" },
                             compromissos = dadosRestantes.compromissos,
+                            // Compartilha as fichas e fotos com a agenda do Início.
+                            animais = animais,
+                            // Abre os mesmos detalhes utilizados na agenda completa.
+                            aoAbrirCompromisso = { id ->
+                                // Identifica o compromisso escolhido.
+                                dadosRestantes = dadosRestantes.copy(
+                                    compromissoId = id
+                                )
+                                // Abre a tela de detalhes existente.
+                                abrirRestante("detalhes_compromisso")
+                            },
                             // Seleciona o dia do aviso antes de abrir a agenda.
                             aoAbrirAgendaNaData = { data ->
                                 // A agenda já lê agendaDataAlvo e seleciona dia, mês e ano.
@@ -306,14 +403,40 @@ class MainActivity : ComponentActivity() {
                                 animalEmEdicaoId = null
                                 origemNovaFicha = "inicio"
                                 telaAtual = "nova_ficha"
-                            }
+                            },
+                                    // Conta apenas os animais ativos que ainda estão no abrigo.
+                                    totalAnimaisNoAbrigo = animais.count {
+                                !it.arquivado && it.situacao != "Adotado"
+                            },
+                            // Usa a capacidade cadastrada em Meu abrigo.
+                            capacidadeAbrigo = dadosRestantes.abrigo.capacidade,
+                            // Conta as fichas marcadas como Adotado, inclusive arquivadas.
+                            totalAnimaisAdotados = animais.count {
+                                it.situacao.equals("Adotado", ignoreCase = true)
+                            },
+                            // Abre a tela que contém os dados do abrigo.
+                            aoVerDadosAbrigo = {
+                                abrirRestante("meu_abrigo")
+                            },
                         )
                         // Retorna ao inicio pelo menu inferior ou pelo botao Voltar do Android.
                         "animais" -> estadoLista.SaveableStateProvider("lista_animais") { TelaAnimais(
                             // Liga o item Agenda ao calendario.
                             aoAgenda = { telaAtual = "agenda" },
                             aoVoltarInicio = { telaAtual = "inicio" },
-                            aoAdocoes = { telaAtual = "adocoes" },
+                            aoAdocoes = {
+                                origemAdocoes = "animais"
+                                telaAtual = "adocoes"
+                            },
+                            aoArquivadas = { telaAtual = "fichas_arquivadas" },
+                            aoCadastrarAnimal = {
+                                animalEmEdicaoId = null
+                                origemNovaFicha = "animais"
+                                telaAtual = "nova_ficha"
+                            },
+                            aoCriarPostagem = {
+                                abrirRestante("criar_postagem")
+                            },
                             animais = animais,
                             aoAdicionar = {
                                 origemAdicionar = "animais"
@@ -325,12 +448,44 @@ class MainActivity : ComponentActivity() {
                                 telaAtual = "ficha_animal"
                             }
                         ) }
+
+                        "fichas_arquivadas" -> TelaFichasArquivadas(
+                            animais = animais,
+                            agora = agoraArquivos,
+                            aoVoltar = { telaAtual = "animais" },
+                            aoInicio = { telaAtual = "inicio" },
+                            aoAgenda = { telaAtual = "agenda" },
+                            aoAbrirFicha = { id ->
+                                origemFicha = "fichas_arquivadas"
+                                animalSelecionadoId = id
+                                telaAtual = "ficha_animal"
+                            },
+                            aoRestaurar = { id ->
+                                val agora = System.currentTimeMillis()
+
+                                // Não restaura uma ficha cujo prazo já terminou.
+                                animais = ArrayList(
+                                    animais.filterNot {
+                                        arquivoAnimalVencido(it, agora)
+                                    }.map {
+                                        if (it.id == id && it.arquivado) {
+                                            it.copy(
+                                                arquivado = false,
+                                                arquivadoEm = null
+                                            )
+                                        } else it
+                                    }
+                                )
+                            }
+                        )
+
                         // Mantem a busca e os filtros do painel ao alternar entre destinos.
                         "adocoes" -> estadoLista.SaveableStateProvider("adocoes") {
                             TelaAdocoes(
                                 animais = animais,
                                 processos = processosAdocao,
-                                aoVoltar = { telaAtual = "animais" },
+                                // Retorna à ficha ou à lista de animais, conforme a origem.
+                                aoVoltar = { telaAtual = origemAdocoes },
                                 aoInicio = { telaAtual = "inicio" },
                                 aoAnimais = { telaAtual = "animais" },
                                 aoAgenda = { telaAtual = "agenda" },
@@ -423,12 +578,57 @@ class MainActivity : ComponentActivity() {
                         }
                         // Usa uma unica tela para qualquer animal escolhido, inclusive novas fichas.
                         "ficha_animal" -> {
-                            val animal = animais.firstOrNull { it.id == animalSelecionadoId && !it.arquivado }
+                            // Permite consultar uma arquivada enquanto o prazo não venceu.
+                            val animal = animais.firstOrNull {
+                                it.id == animalSelecionadoId &&
+                                        !arquivoAnimalVencido(it)
+                            }
                             if (animal != null) {
                                 TelaFichaAnimal(
                                     // Liga o item Agenda ao calendario.
                                     aoAgenda = { telaAtual = "agenda" },
                                     animal = animal,
+                                    aoArquivar = {
+                                        val agora = System.currentTimeMillis()
+
+                                        animais = ArrayList(animais.map {
+                                            if (it.id == animal.id) {
+                                                it.copy(
+                                                    arquivado = true,
+                                                    arquivadoEm = agora
+                                                )
+                                            } else it
+                                        })
+
+                                        animalSelecionadoId = null
+                                        animalEmEdicaoId = null
+                                        telaAtual = "animais"
+                                    },
+                                    aoRestaurar = {
+                                        val agora = System.currentTimeMillis()
+                                        val vencida = arquivoAnimalVencido(animal, agora)
+
+                                        animais = ArrayList(
+                                            animais.filterNot {
+                                                arquivoAnimalVencido(it, agora)
+                                            }.map {
+                                                if (it.id == animal.id) {
+                                                    it.copy(
+                                                        arquivado = false,
+                                                        arquivadoEm = null
+                                                    )
+                                                } else it
+                                            }
+                                        )
+
+                                        if (vencida) {
+                                            animalSelecionadoId = null
+                                            telaAtual = "fichas_arquivadas"
+                                        } else {
+                                            // A ficha restaurada passa a pertencer à lista ativa.
+                                            origemFicha = "animais"
+                                        }
+                                    },
                                     aoVoltar = { telaAtual = origemFicha },
                                     aoInicio = { telaAtual = "inicio" },
                                     aoAdicionar = {
@@ -436,9 +636,9 @@ class MainActivity : ComponentActivity() {
                                         telaAtual = "adicionar"
                                     },
                                     aoAcompanharAdocao = {
-                                        processoSelecionadoId = processosAdocao.firstOrNull { it.animalId == animal.id }?.id
-                                        origemAcompanhamento = "ficha_animal"
-                                        telaAtual = "acompanhar_adocao"
+                                        // Abre a lista de processos mostrada na primeira imagem.
+                                        origemAdocoes = "ficha_animal"
+                                        telaAtual = "adocoes"
                                     },
                                     aoEditar = {
                                         animalEmEdicaoId = animal.id
@@ -506,6 +706,37 @@ class MainActivity : ComponentActivity() {
                         )
                         // Centraliza os atalhos do botao mais e liga o cadastro ja existente.
                         "adicionar" -> TelaAdicionar(
+                            // Relaciona a tela de origem à sua aba principal.
+                            abaOrigem = when (origemAdicionar) {
+                                // Fichas e divulgação pertencem a Animais.
+                                "animais",
+                                "ficha_animal",
+                                "nova_ficha",
+                                "editar_ficha",
+                                "adocoes",
+                                "acompanhar_adocao",
+                                "criar_postagem",
+                                "divulgacao" -> "Animais"
+
+                                // Cadastros financeiros pertencem a Finanças.
+                                "financas",
+                                "registrar_doacao",
+                                "registrar_despesa",
+                                "relatorios" -> "Finanças"
+
+                                // Compromissos pertencem à Agenda.
+                                "agenda",
+                                "novo_compromisso",
+                                "detalhes_compromisso" -> "Agenda"
+
+                                // Mantém a identificação da Loja.
+                                "loja",
+                                "oferta_parceiro",
+                                "criar_anuncio" -> "Loja"
+
+                                // O Início apresenta todas as ações.
+                                else -> "Início"
+                            },
                             aoRegistrarDoacao = { abrirRestante("registrar_doacao") },
                             aoRegistrarDespesa = { abrirRestante("registrar_despesa") },
                             aoAgendarCuidado = {

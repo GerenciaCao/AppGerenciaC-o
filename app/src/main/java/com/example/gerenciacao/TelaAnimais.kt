@@ -34,6 +34,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+
 // Guarda os dados de cada animal.
 data class AnimalExemplo(
     val nome: String,
@@ -61,8 +67,18 @@ data class AnimalExemplo(
     // Guarda as características de comportamento.
     val comportamento: String = "",
     // Guarda informações complementares.
-    val observacoes: String = ""
-) : java.io.Serializable
+    // Guarda informações complementares.
+    val observacoes: String = "",
+    // Preserva a foto original para permitir refazer o enquadramento.
+    val fotoOriginalUri: String? = null,
+    // Guarda o instante do arquivamento para calcular os 30 dias.
+    val arquivadoEm: Long? = null
+) : java.io.Serializable {
+    companion object {
+        // Mantém a identificação do formato salvo no aparelho.
+        private const val serialVersionUID: Long = 1L
+    }
+}
 
 // Mantém os animais de exemplo do projeto.
 val AnimaisExemplo = listOf(
@@ -108,7 +124,10 @@ fun TelaAnimais(
     aoAdicionar: () -> Unit,
     aoAbrirFicha: (String) -> Unit,
     aoAgenda: () -> Unit,
-    aoAdocoes: () -> Unit
+    aoAdocoes: () -> Unit,
+    aoArquivadas: () -> Unit = {},
+    aoCadastrarAnimal: () -> Unit = {},
+    aoCriarPostagem: () -> Unit = {}
 ) {
     // Guarda a pesquisa e os dois filtros separadamente.
     var busca by rememberSaveable { mutableStateOf("") }
@@ -182,11 +201,10 @@ fun TelaAnimais(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    // Mostra o título e o acesso às adoções.
+                    // Mantém a ação principal ao lado do título.
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
                             text = "Animais",
@@ -197,17 +215,13 @@ fun TelaAnimais(
                             color = TextoAnimais
                         )
 
-                        TextButton(onClick = aoAdocoes) {
-                            Text(
-                                text = "Adoções",
-                                color = MarromAnimais,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        BotaoAcaoTitulo(
+                            texto = "Adicionar",
+                            aoClicar = aoAdicionar
+                        )
+
                     }
-
                     Spacer(Modifier.height(24.dp))
-
                     // Pesquisa pelo nome e abre o filtro de disponibilidade.
                     OutlinedTextField(
                         value = busca,
@@ -339,15 +353,15 @@ fun TelaAnimais(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // Filtro dos animais por espécie: Todos, Cães ou Gatos.
+                    // Filtros de espécie e acesso às fichas arquivadas.
                     Row(
-                        // Define o espaço entre os botões de filtro.
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        // Cria um botão para cada opção da lista.
                         listOf("Todos", "Cães", "Gatos").forEach { opcao ->
-
-                            // Define a foto utilizada em cada botão do filtro de animais.
                             val fotoFiltro = when (opcao) {
                                 "Cães" -> R.drawable.icondog
                                 "Gatos" -> R.drawable.iconcat
@@ -355,20 +369,12 @@ fun TelaAnimais(
                             }
 
                             FilterChip(
-                                // Destaca o botão correspondente ao filtro atual.
                                 selected = filtro == opcao,
-
-                                // Atualiza o filtro ao tocar no botão.
-                                // A lista animaisVisiveis usa esse valor para filtrar as fichas.
                                 onClick = { filtro = opcao },
-
-                                // Exibe uma foto provisória somente nos filtros Cães e Gatos.
-                                // O filtro Todos permanece apenas com o texto.
-                                leadingIcon = if (opcao != "Todos") {
+                                leadingIcon = if (fotoFiltro != null) {
                                     {
                                         Image(
-                                            // Usa uma imagem que já existe no projeto.
-                                            painter = painterResource(id = fotoFiltro ?: R.drawable.icondog),
+                                            painter = painterResource(fotoFiltro),
                                             contentDescription = opcao,
                                             modifier = Modifier
                                                 .size(24.dp)
@@ -376,11 +382,7 @@ fun TelaAnimais(
                                             contentScale = ContentScale.Crop
                                         )
                                     }
-                                } else {
-                                    null
-                                },
-
-                                // Define o nome e a aparência do texto do botão.
+                                } else null,
                                 label = {
                                     Text(
                                         text = opcao,
@@ -388,14 +390,8 @@ fun TelaAnimais(
                                         fontWeight = FontWeight.Bold
                                     )
                                 },
-
-                                // Deixa as extremidades do botão arredondadas.
                                 shape = CircleShape,
-
-                                // Remove a borda do botão.
                                 border = null,
-
-                                // Define as cores dos botões selecionados e não selecionados.
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = AmareloAnimais,
                                     selectedLabelColor = MarromAnimais,
@@ -404,9 +400,13 @@ fun TelaAnimais(
                                 )
                             )
                         }
+
+                        // Coloca o acesso às arquivadas depois de Gatos.
+                        AcessoArquivadasAnimais(aoAbrir = aoArquivadas)
                     }
 
                     Spacer(Modifier.height(18.dp))
+
 
                     // Atualiza o contador conforme os filtros.
                     Row(
@@ -671,6 +671,67 @@ private fun PreviaTelaAnimais() {
             aoAbrirFicha = {},
             aoAgenda = {},
             aoAdocoes = {}
+        )
+    }
+}
+
+// Mantém o acesso às arquivadas separado dos filtros de espécie.
+@Composable
+private fun AcessoArquivadasAnimais(
+    aoAbrir: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        IconButton(
+            onClick = aoAbrir,
+            modifier = Modifier
+                .size(48.dp)
+                .semantics {
+                    contentDescription = "Abrir fichas arquivadas"
+                }
+        ) {
+            Canvas(Modifier.size(26.dp)) {
+                val contorno = androidx.compose.ui.graphics.drawscope.Stroke(
+                    width = 2.dp.toPx()
+                )
+
+                drawRect(
+                    color = MarromAnimais,
+                    topLeft = Offset(size.width * 0.12f, size.height * 0.16f),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width * 0.76f,
+                        size.height * 0.20f
+                    ),
+                    style = contorno
+                )
+
+                drawRect(
+                    color = MarromAnimais,
+                    topLeft = Offset(size.width * 0.20f, size.height * 0.36f),
+                    size = androidx.compose.ui.geometry.Size(
+                        size.width * 0.60f,
+                        size.height * 0.48f
+                    ),
+                    style = contorno
+                )
+
+                drawLine(
+                    color = MarromAnimais,
+                    start = Offset(size.width * 0.40f, size.height * 0.53f),
+                    end = Offset(size.width * 0.60f, size.height * 0.53f),
+                    strokeWidth = 2.dp.toPx()
+                )
+            }
+        }
+
+        // Somente o ícone acima é clicável.
+        Text(
+            text = "Fichas\narquivadas",
+            fontSize = 11.sp,
+            lineHeight = 13.sp,
+            color = MarromAnimais,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
     }
 }

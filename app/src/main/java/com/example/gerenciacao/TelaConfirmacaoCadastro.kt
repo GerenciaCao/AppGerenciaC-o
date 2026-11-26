@@ -80,31 +80,15 @@ fun TelaConfirmacaoCadastro(
                 .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Mostra uma seta maior junto do texto de retorno.
-            TextButton(
-                onClick = aoVoltarLogin,
+
+            // Padroniza o retorno ao login.
+            BotaoVoltarPadrao(
+                aoVoltar = aoVoltarLogin,
                 modifier = Modifier
                     .align(Alignment.Start)
                     .padding(top = 12.dp),
-                contentPadding = PaddingValues(
-                    horizontal = 0.dp,
-                    vertical = 8.dp
-                )
-            ) {
-                Text(
-                    text = "←",
-                    fontSize = 24.sp,
-                    color = marrom
-                )
-
-                Spacer(Modifier.width(8.dp))
-
-                Text(
-                    text = "Voltar ao login",
-                    fontSize = 14.sp,
-                    color = marrom
-                )
-            }
+                descricao = "Voltar ao login"
+            )
 
             Spacer(Modifier.height(36.dp))
 

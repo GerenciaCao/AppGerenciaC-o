@@ -41,7 +41,9 @@ fun TelaAdicionar(
     aoAgendarCuidado: () -> Unit,
     aoCriarPostagem: () -> Unit,
     aoParcerias: () -> Unit,
-    aoDivulgacao: () -> Unit
+    aoDivulgacao: () -> Unit,
+    // Identifica a aba que abriu a tela de ações.
+    abaOrigem: String = "Início"
 ) {
     // Mantem as cores e o comportamento de avisos das outras telas do aplicativo.
     val fundo = Color(0xFFFFFCF7)
@@ -65,8 +67,21 @@ fun TelaAdicionar(
         MolduraPadraoApp(
             modifier = Modifier.weight(1f), containerColor = fundo,
             snackbarHost = { SnackbarHost(avisos) },
+            // Esconde o botão + enquanto as ações já estão abertas.
+            floatingActionButton = {},
             bottomBar = {
-                MenuInferiorInicio(avisar, selecionado = "", aoInicio = aoInicio, aoAnimais = aoAnimais, aoAdicionar = {}, aoAgenda = aoAgenda)
+                MenuInferiorInicio(
+                    // Mantém os avisos da navegação.
+                    avisar = avisar,
+                    // Destaca em marrom a aba que abriu as ações.
+                    selecionado = abaOrigem,
+                    // Preserva os destinos existentes.
+                    aoInicio = aoInicio,
+                    aoAnimais = aoAnimais,
+                    // Esta página já apresenta as ações de adicionar.
+                    aoAdicionar = {},
+                    aoAgenda = aoAgenda
+                )
             }
         ) { espacos ->
             Column(
@@ -84,35 +99,97 @@ fun TelaAdicionar(
                     lineHeight = 18.sp, color = Color(0xFF7E7066))
                 Spacer(Modifier.height(26.dp))
 
-                // O cadastro de bichinhos ja possui formulario e abre diretamente a Nova ficha.
-                AcaoAdicionar("Cadastrar bichinho", "Registre um animal no abrigo",
-                    R.drawable.inicio_pata, creme, aoCadastrarBichinho)
-                Spacer(Modifier.height(12.dp))
+                // O Início mantém acesso a todas as ações.
+                val mostrarTodas = abaOrigem == "Início"
 
-                // Os atalhos abrem os formularios locais das novas entregas.
-                AcaoAdicionar("Registrar doação", "Anote o que o abrigo recebeu",
-                    R.drawable.adicionar_doacao, Color(0xFFE1F3E8)) {
-                    aoRegistrarDoacao()
+                Column(
+                    // Mantém os cartões na largura disponível.
+                    modifier = Modifier.fillMaxWidth(),
+                    // Separa somente os cartões que estão visíveis.
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (mostrarTodas || abaOrigem == "Animais") {
+                        AcaoAdicionar(
+                            // Identifica o cadastro de uma ficha.
+                            titulo = "Cadastrar bichinho",
+                            // Explica a ação.
+                            descricao = "Registre um animal no abrigo",
+                            // Usa a mesma patinha da navegação.
+                            icone = R.drawable.iconanimais,
+                            // Define o fundo do ícone.
+                            fundoIcone = creme,
+                            // Abre o formulário já existente.
+                            aoClicar = aoCadastrarBichinho
+                        )
+
+                        AcaoAdicionar(
+                            // Identifica a divulgação.
+                            titulo = "Criar postagem",
+                            // Explica o destino.
+                            descricao = "Prepare a divulgação de um bichinho",
+                            // Reutiliza o ícone existente.
+                            icone = R.drawable.adicionar_postagem,
+                            // Define o fundo do ícone.
+                            fundoIcone = Color(0xFFE1F3E8),
+                            // Abre a criação de postagem já ligada.
+                            aoClicar = aoCriarPostagem
+                        )
+                    }
+
+                    if (mostrarTodas || abaOrigem == "Finanças") {
+                        AcaoAdicionar(
+                            // Identifica o registro de recebimentos.
+                            titulo = "Registrar doação",
+                            // Inclui doações em dinheiro e produtos.
+                            descricao = "Anote o que o abrigo recebeu",
+                            // Relaciona a ação à área financeira.
+                            icone = R.drawable.inicio_carteira,
+                            // Define o fundo do ícone.
+                            fundoIcone = Color(0xFFE1F3E8),
+                            // Abre o formulário de doação.
+                            aoClicar = aoRegistrarDoacao
+                        )
+
+                        AcaoAdicionar(
+                            // Identifica o registro de gastos.
+                            titulo = "Registrar despesa",
+                            // Explica a ação.
+                            descricao = "Registre os gastos do abrigo",
+                            // Reutiliza o ícone de recibo.
+                            icone = R.drawable.inicio_recibo,
+                            // Define o fundo do ícone.
+                            fundoIcone = Color(0xFFFFEFE2),
+                            // Abre o formulário de despesa.
+                            aoClicar = aoRegistrarDespesa
+                        )
+                    }
+
+                    if (mostrarTodas || abaOrigem == "Agenda") {
+                        AcaoAdicionar(
+                            // Identifica o agendamento.
+                            titulo = "Agendar cuidado",
+                            // Abrange as categorias da agenda.
+                            descricao = "Vacinas, visitas e serviços",
+                            // Usa o mesmo calendário da navegação.
+                            icone = R.drawable.iconcalendario,
+                            // Define o fundo do ícone.
+                            fundoIcone = creme,
+                            // Abre o formulário de compromisso.
+                            aoClicar = aoAgendarCuidado
+                        )
+                    }
+
+                    if (abaOrigem == "Loja") {
+                        Text(
+                            // Evita apresentar ações de outros módulos na Loja.
+                            text = "Nenhuma ação de cadastro disponível nesta aba.",
+                            // Mantém a leitura do conteúdo.
+                            fontSize = 14.sp,
+                            // Usa a cor secundária.
+                            color = Color(0xFF7E7066)
+                        )
+                    }
                 }
-                Spacer(Modifier.height(12.dp))
-                AcaoAdicionar("Registrar despesa", "Organize os gastos",
-                    R.drawable.inicio_recibo, Color(0xFFFFEFE2)) {
-                    aoRegistrarDespesa()
-                }
-                Spacer(Modifier.height(12.dp))
-                AcaoAdicionar("Agendar cuidado", "Vacinas, visitas e serviços",
-                    R.drawable.inicio_calendario, creme) {
-                    aoAgendarCuidado()
-                }
-                Spacer(Modifier.height(12.dp))
-                AcaoAdicionar("Criar postagem", "Divulgue um bichinho",
-                    R.drawable.adicionar_postagem, Color(0xFFE1F3E8)) {
-                    aoCriarPostagem()
-                }
-                Spacer(Modifier.height(16.dp))
-                // Mantem os cinco atalhos originais e acrescenta acesso aos outros modulos.
-                TextButton(onClick = aoParcerias) { Text("Parcerias", color = marrom) }
-                TextButton(onClick = aoDivulgacao) { Text("Modelos de divulgação", color = marrom) }
             }
         }
     }

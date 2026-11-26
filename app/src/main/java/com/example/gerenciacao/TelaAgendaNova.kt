@@ -384,7 +384,7 @@ fun TelaAgendaIntegrada(
 
 // Cartão inspirado na agenda antiga, alimentado pelos registros reais.
 @Composable
-private fun CartaoCompromissoAgendaUnica(
+internal fun CartaoCompromissoAgendaUnica(
     // Registro selecionado da agenda.
     compromisso: CompromissoAbrigo,
     // Animal vinculado; pode ser ausente em visitas gerais.

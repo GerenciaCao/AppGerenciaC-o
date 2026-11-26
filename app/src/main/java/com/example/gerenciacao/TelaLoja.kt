@@ -58,9 +58,9 @@ private val ImagensIndividuaisLoja: Map<String, Int?> = mapOf(
 
 // Exemplos ilustrativos do molde; seus valores nao representam ofertas comerciais reais.
 private val OfertasDemonstrativasLoja = listOf(
-    OfertaAbrigo(id = "vitrine-demo-racao", titulo = "Sachê Pedigree Carne", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 6990L,
+    OfertaAbrigo(id = "vitrine-demo-racao", especieAlvo = "Cães", titulo = "Sachê Pedigree Carne", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 6990L,
         descricao = "Para cães adultos de raças pequenas. Embalagem de 100 g."),
-    OfertaAbrigo(id = "vitrine-demo-umido", titulo = "Sachê Whiskas", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 599L,
+    OfertaAbrigo(id = "vitrine-demo-umido", especieAlvo = "Gatos", titulo = "Sachê Whiskas", categoria = "Alimentação", parceiro = "Parceiro de exemplo", centavos = 599L,
         descricao = "Para gatos adultos. Embalagem de 85 g."),
     OfertaAbrigo(id = "vitrine-demo-petisco", titulo = "Sachê Pedigree Carne", categoria = "Alimentação", parceiro = "Exemplo de catálogo", centavos = 499L,
         descricao = "Para cães adultos de raças pequenas. Embalagem de 100 g."),
@@ -99,16 +99,20 @@ fun aplicarFiltrosPrecoLoja(ofertas: List<OfertaAbrigo>, parceiro: String, minim
 private val BrancoLoja = Color(0xFFFFFCF7)
 private val AzulLoja = Color(0xFF8EB8E8)
 private val LaranjaLoja = Color(0xFFFF9F43)
-private val TextoLoja = Color(0xFF493020)
+private val TextoLoja = Color(0xFF41201F)
 
 // Mantém a assinatura e os destinos que a navegação já utiliza.
 @Composable
 fun TelaLoja(ctx: ContextoAbrigo) {
     // Guarda a categoria de serviço aberta ao tocar em um banner.
     var servicoSelecionado by rememberSaveable { mutableStateOf<String?>(null) }
+    // Guarda o título do produto para apresentar o aviso de redirecionamento.
+    var anuncioExterno by rememberSaveable { mutableStateOf<String?>(null) }
     var busca by rememberSaveable { mutableStateOf("") }
     var tipo by rememberSaveable { mutableStateOf("Produtos") }
     var categoria by rememberSaveable { mutableStateOf("Todas") }
+    // Guarda o público escolhido pelo banner; vazio aceita todos os públicos.
+    var especieProduto by rememberSaveable { mutableStateOf("") }
     var parceiro by rememberSaveable { mutableStateOf("Todos") }
     var minimo by rememberSaveable { mutableStateOf<Long?>(null) }
     var maximo by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -119,16 +123,48 @@ fun TelaLoja(ctx: ContextoAbrigo) {
     // Consulta o tamanho da fonte no contexto Compose antes de montar a lista.
     val colunas = if (LocalDensity.current.fontScale > 1.2f) 1 else 2
     val catalogo = catalogoLoja(ctx.dados.ofertas)
+    // Combina busca, categoria, público, parceiro e preço.
     val visiveis = aplicarFiltrosPrecoLoja(
-        filtrarCatalogoLoja(catalogo, busca, tipo, categoria),
+        filtrarCatalogoLoja(catalogo, busca, tipo, categoria)
+            .filter { oferta ->
+                especieProduto.isBlank() ||
+                        oferta.especieAlvo == especieProduto ||
+                        oferta.especieAlvo == "Ambos"
+            },
         parceiro, minimo, maximo, ordem
     )
-    val filtrosAtivos = categoria != "Todas" || parceiro != "Todos" ||
-            minimo != null || maximo != null || ordem != "Destaques"
+
+    val filtrosAtivos = categoria != "Todas" ||
+            especieProduto.isNotBlank() ||
+            parceiro != "Todos" ||
+            minimo != null ||
+            maximo != null ||
+            ordem != "Destaques"
+
+// Apresenta os resultados sem o carrossel ao buscar ou aplicar filtros.
+    val exibindoResultados = busca.isNotBlank() || filtrosAtivos
+
+// Retorna à vitrine inicial e remove os filtros da busca.
+    val voltarParaVitrine: () -> Unit = {
+        busca = ""
+        categoria = "Todas"
+        especieProduto = ""
+        parceiro = "Todos"
+        minimo = null
+        maximo = null
+        ordem = "Destaques"
+        servicoSelecionado = null
+    }
 
     val abrir: (OfertaAbrigo) -> Unit = { oferta ->
-        ctx.atualizar(ctx.dados.copy(ofertaId = oferta.id))
-        ctx.abrir("oferta_parceiro")
+        if (oferta.tipo == "Serviço") {
+            // Mantém a navegação atual dos serviços.
+            ctx.atualizar(ctx.dados.copy(ofertaId = oferta.id))
+            ctx.abrir("oferta_parceiro")
+        } else {
+            // Apresenta o aviso ao tocar em um anúncio de produto.
+            anuncioExterno = oferta.titulo
+        }
     }
 
     if (tipo == "Serviços" && servicoSelecionado == "Clínicas veterinárias") {
@@ -187,11 +223,16 @@ fun TelaLoja(ctx: ContextoAbrigo) {
 
     // Voltar retorna às categorias antes de sair da loja.
     BackHandler {
-        if (tipo == "Serviços" && servicoSelecionado != null) {
-            servicoSelecionado = null
-            busca = ""
-        } else {
-            ctx.principal("inicio")
+        when {
+            tipo == "Serviços" && servicoSelecionado != null -> {
+                servicoSelecionado = null
+                busca = ""
+            }
+
+            // Voltar sai dos resultados antes de sair da loja.
+            exibindoResultados -> voltarParaVitrine()
+
+            else -> ctx.principal("inicio")
         }
     }
 
@@ -315,7 +356,11 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     listOf("Produtos", "Serviços").forEach { opcao ->
                         Column(Modifier.weight(1f)) {
                             TextButton(
-                                onClick = { tipo = opcao; categoria = "Todas"; servicoSelecionado = null; busca = "" },
+                                onClick = {
+                                    // Remove os filtros da aba anterior.
+                                    voltarParaVitrine()
+                                    tipo = opcao
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
@@ -333,12 +378,38 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                         }
                     }
                 }
-                if (filtrosAtivos) {
-                    TextButton(onClick = {
-                        categoria = "Todas"; parceiro = "Todos"
-                        minimo = null; maximo = null; ordem = "Destaques"
-                    }) {
-                        Text("Limpar filtros", color = TextoLoja)
+                if (exibindoResultados) {
+                    TextButton(onClick = voltarParaVitrine) {
+                        Text(
+                            text = "← Voltar para a vitrine",
+                            color = TextoLoja,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // Identifica os filtros definidos pelo banner.
+                    val resumoFiltro = listOfNotNull(
+                        categoria.takeIf { it != "Todas" },
+                        especieProduto.takeIf { it.isNotBlank() }
+                    ).joinToString(" · ")
+
+                    if (resumoFiltro.isNotBlank()) {
+                        Surface(
+                            color = Color(0xFFE7F4FE),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text(
+                                text = "Filtro: $resumoFiltro",
+                                modifier = Modifier.padding(
+                                    horizontal = 12.dp,
+                                    vertical = 8.dp
+                                ),
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = Color(0xFF285484)
+                            )
+                        }
                     }
                 }
             }
@@ -437,15 +508,31 @@ fun TelaLoja(ctx: ContextoAbrigo) {
                     }
                 }
             } else {
-                // Carrossel de imagens exportadas do Figma, antes dos produtos.
-                item {
-                    CarrosselBannersParcerias()
+                // O carrossel aparece somente na vitrine inicial.
+                if (!exibindoResultados) {
+                    item {
+                        CarrosselBannersParcerias(
+                            aoAbrirBusca = { banner ->
+                                // Começa uma busca nova com os filtros deste banner.
+                                voltarParaVitrine()
+                                tipo = "Produtos"
+                                categoria = banner.categoria
+                                especieProduto = banner.especie
+                            }
+                        )
+                    }
                 }
+
                 item {
-                    // Sem histórico de compras, o título não promete "comprar novamente".
                     Text(
-                        if (tipo == "Serviços") "Serviços dos parceiros" else "Produtos em destaque",
-                        fontSize = 20.sp, fontWeight = FontWeight.Bold, color = TextoLoja
+                        text = if (exibindoResultados) {
+                            "Resultados da busca"
+                        } else {
+                            "Produtos em destaque"
+                        },
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextoLoja
                     )
                 }
 
@@ -489,6 +576,78 @@ fun TelaLoja(ctx: ContextoAbrigo) {
             aplicar = { c, p, min, max, o ->
                 categoria = c; parceiro = p; minimo = min; maximo = max
                 ordem = o; mostrarFiltros = false
+            }
+        )
+    }
+
+    // Mostra o destino previsto sem depender de internet na apresentação.
+    anuncioExterno?.let { tituloProduto ->
+        AlertDialog(
+            // Permite fechar ao tocar fora do aviso ou usar o botão Voltar.
+            onDismissRequest = { anuncioExterno = null },
+            // Mantém o fundo branco e as bordas arredondadas.
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "Você vai para o site do parceiro",
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextoLoja
+                )
+            },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        // Identifica o anúncio selecionado.
+                        text = tituloProduto,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextoLoja
+                    )
+                    Text(
+                        text = "Este anúncio leva à página de compra indicada pelo parceiro.",
+                        fontSize = 16.sp,
+                        lineHeight = 23.sp,
+                        color = TextoLoja
+                    )
+                    Surface(
+                        // Destaca a explicação sobre o funcionamento da demonstração.
+                        color = Color(0xFFE7F4FE),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            text = "Nesta demonstração sem internet, o link externo não será aberto.",
+                            modifier = Modifier.padding(14.dp),
+                            fontSize = 15.sp,
+                            lineHeight = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFF941913)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    // Fecha o aviso e permanece na loja.
+                    onClick = { anuncioExterno = null },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 48.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF432818),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Entendi",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
         )
     }
@@ -587,6 +746,14 @@ private fun CartaoProdutoNovaLoja(
                     fontWeight = FontWeight.Bold,
                     // Aplica laranja escuro para manter leitura no fundo claro.
                     color = Color(0xFFB94E00)
+                )
+                Text(
+                    // Explica a ação de tocar no cartão do anúncio.
+                    text = "Ver no site do parceiro ↗",
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF285484)
                 )
             }
         }
@@ -695,25 +862,65 @@ private fun BannerCategoriaServicoLoja(
 
 // Associa cada imagem do carrossel ao seu texto acessível.
 // Exporte cada banner separadamente, sem as guias de alinhamento do Figma.
+// Associa cada banner à imagem e aos filtros dos produtos.
 private data class BannerCarrosselParceria(
     val imagem: Int,
-    val descricao: String
+    val descricao: String,
+    val categoria: String,
+    // Vazio permite mostrar produtos de qualquer público.
+    val especie: String = ""
 )
 
 private val BannersCarrosselParcerias = listOf(
-    BannerCarrosselParceria(R.drawable.banner_farmacia_caes, "Farmácia para cães"),
-    BannerCarrosselParceria(R.drawable.banner_alimentos_gatos, "Alimentos para gatos"),
-    BannerCarrosselParceria(R.drawable.banner_brinquedos_caes, "Brinquedos para cães"),
-    BannerCarrosselParceria(R.drawable.banner_higiene_animal, "Higiene animal"),
-    BannerCarrosselParceria(R.drawable.banner_brinquedos_gatos, "Brinquedos para gatos"),
-    BannerCarrosselParceria(R.drawable.banner_alimentos_caes, "Alimentos para cães"),
-    BannerCarrosselParceria(R.drawable.banner_farmacia_gatos, "Farmácia para gatos")
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_farmacia_caes,
+        descricao = "Farmácia para cães",
+        categoria = "Saúde",
+        especie = "Cães"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_alimentos_gatos,
+        descricao = "Alimentos para gatos",
+        categoria = "Alimentação",
+        especie = "Gatos"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_brinquedos_caes,
+        descricao = "Brinquedos para cães",
+        categoria = "Brinquedos",
+        especie = "Cães"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_higiene_animal,
+        descricao = "Higiene animal",
+        categoria = "Higiene"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_brinquedos_gatos,
+        descricao = "Brinquedos para gatos",
+        categoria = "Brinquedos",
+        especie = "Gatos"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_alimentos_caes,
+        descricao = "Alimentos para cães",
+        categoria = "Alimentação",
+        especie = "Cães"
+    ),
+    BannerCarrosselParceria(
+        imagem = R.drawable.banner_farmacia_gatos,
+        descricao = "Farmácia para gatos",
+        categoria = "Saúde",
+        especie = "Gatos"
+    )
 )
 
 // Permite deslizar os banners e escolher uma página pelos indicadores.
 // Alterna os banners automaticamente e também permite arrastar.
 @Composable
-private fun CarrosselBannersParcerias() {
+private fun CarrosselBannersParcerias(
+    aoAbrirBusca: (BannerCarrosselParceria) -> Unit
+) {
     // Mantém a quantidade real de banners usada pelos pontos e pelas imagens.
     val quantidade = BannersCarrosselParcerias.size
     // Começa no meio da sequência, alinhado ao primeiro banner real.
@@ -785,7 +992,13 @@ private fun CarrosselBannersParcerias() {
                 contentDescription = banner.descricao,
                 modifier = Modifier.fillMaxWidth()
                     .aspectRatio(proporcao)
-                    .clip(RoundedCornerShape(16.dp)),
+                    .clip(RoundedCornerShape(16.dp))
+                    // Abre os resultados correspondentes ao banner tocado.
+                    .clickable(
+                        onClickLabel = "Ver " + banner.descricao
+                    ) {
+                        aoAbrirBusca(banner)
+                    },
                 contentScale = ContentScale.Fit
             )
         }

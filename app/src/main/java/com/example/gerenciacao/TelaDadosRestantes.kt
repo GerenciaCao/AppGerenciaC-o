@@ -16,15 +16,35 @@ data class CompromissoAbrigo(val id: String = UUID.randomUUID().toString(), val 
 
 // Produtos e recebimentos de bichinhos nao possuem valor em reais no resumo financeiro.
 enum class NaturezaAbrigo { DINHEIRO, PRODUTOS, BICHINHO, DESPESA }
-data class LancamentoAbrigo(val id: String = UUID.randomUUID().toString(), val descricao: String,
-                            val natureza: NaturezaAbrigo, val data: String, val centavos: Long = 0,
-                            val quantidade: String = "", val categoria: String = "", val animalId: String? = null,
-                            val observacoes: String = "") : Serializable
+data class LancamentoAbrigo(
+    val id: String = UUID.randomUUID().toString(),
+    val descricao: String,
+    val natureza: NaturezaAbrigo,
+    val data: String,
+    val centavos: Long = 0,
+    val quantidade: String = "",
+    val categoria: String = "",
+    val animalId: String? = null,
+    val observacoes: String = "",
+    // Mantém o horário separado da data para preservar os filtros mensais.
+    val horario: String = ""
+) : Serializable
 
 // Ofertas de exemplo nao incluem links reais nem promessas comerciais.
-data class OfertaAbrigo(val id: String = UUID.randomUUID().toString(), val titulo: String,
-                        val categoria: String, val parceiro: String, val descricao: String, val link: String = "",
-                        val tipo: String = "Produto", val centavos: Long? = null, val imagemUri: String? = null) : Serializable
+data class OfertaAbrigo(
+    val id: String = UUID.randomUUID().toString(),
+    val titulo: String,
+    val categoria: String,
+    val parceiro: String,
+    val descricao: String,
+    val link: String = "",
+    val tipo: String = "Produto",
+    val centavos: Long? = null,
+    val imagemUri: String? = null,
+    // Identifica o público do produto: Cães, Gatos ou Ambos.
+    // Vazio significa que essa informação ainda não foi cadastrada.
+    val especieAlvo: String = ""
+) : Serializable
 
 // Define os cargos disponíveis no cadastro, na edição e nos filtros da equipe.
 enum class FuncaoAbrigo(val titulo: String) {
@@ -111,9 +131,9 @@ fun dadosRestantesExemplo(animais: List<AnimalExemplo>): DadosRestantes {
     val saidas = listOf(30000L, 40000L, 32000L, 40000L)
     val dias = listOf("03", "10", "17", "24")
     val movimentos = entradas.indices.flatMap { i -> listOf(
-        LancamentoAbrigo(descricao = "Doação de exemplo ${i + 1}", natureza = NaturezaAbrigo.DINHEIRO,
+        LancamentoAbrigo(descricao = "Doação", natureza = NaturezaAbrigo.DINHEIRO,
             data = "${dias[i]}/11/2026", centavos = entradas[i]),
-        LancamentoAbrigo(descricao = "Despesa de exemplo ${i + 1}", natureza = NaturezaAbrigo.DESPESA,
+        LancamentoAbrigo(descricao = "Despesa de ração", natureza = NaturezaAbrigo.DESPESA,
             data = "${dias[i]}/11/2026", centavos = saidas[i], categoria = "Outros"))
     } + LancamentoAbrigo(descricao = "Ração recebida", natureza = NaturezaAbrigo.PRODUTOS,
         data = "07/11/2026", quantidade = "20 kg")

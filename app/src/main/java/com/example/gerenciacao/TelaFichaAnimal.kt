@@ -57,10 +57,47 @@ fun TelaFichaAnimal(
     pesoPorte: String = animal.porte,
     comportamento: String = animal.comportamento,
     resumoAdocao: String = "",
-    etapasAdocao: List<String> = emptyList()
+    etapasAdocao: List<String> = emptyList(),
+    aoArquivar: (() -> Unit)? = null,
+    aoRestaurar: (() -> Unit)? = null
 ) {
     // Controla os detalhes complementares e o acompanhamento na própria ficha.
     var adocaoAberta by rememberSaveable(animal.id) { mutableStateOf(false) }
+
+    var confirmarArquivamento by rememberSaveable(animal.id) {
+        mutableStateOf(false)
+    }
+
+    if (confirmarArquivamento) {
+        AlertDialog(
+            onDismissRequest = { confirmarArquivamento = false },
+            title = {
+                Text("Arquivar a ficha de ${animal.nome}?")
+            },
+            text = {
+                Text(
+                    "Ela ficará em Fichas arquivadas e poderá ser restaurada por até 30 dias. Após esse prazo, será excluída definitivamente."
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmarArquivamento = false
+                        aoArquivar?.invoke()
+                    }
+                ) {
+                    Text("Arquivar ficha")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { confirmarArquivamento = false }
+                ) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 
     val avisos = remember { SnackbarHostState() }
     val escopo = rememberCoroutineScope()
@@ -204,8 +241,8 @@ fun TelaFichaAnimal(
             Surface(
                 // Mantém as margens e a altura iguais para todos os animais.
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 22.dp)
-                    .padding(bottom = 20.dp).height(240.dp),
-                // Arredonda os cantos do recipiente.
+                // Usa a mesma proporção do formulário e do editor.
+                    .padding(bottom = 20.dp).aspectRatio(4f / 3f),                // Arredonda os cantos do recipiente.
                 shape = RoundedCornerShape(20.dp),
                 // Mantém um fundo neutro nas áreas não ocupadas pela foto.
                 color = Color(0xFF96D7F4),
@@ -360,7 +397,8 @@ fun TelaFichaAnimal(
                     // Mantém a área de registros na largura da ficha.
                     modifier = Modifier.fillMaxWidth(),
                     // Usa o fundo suave do PDF.
-                    color = Color(0xFFFFF1DF),
+                    // Aparece atrás das partes transparentes do PNG.
+                    color = Color(0xFFB7E7FC),
                     // Arredonda somente o bloco do histórico.
                     shape = RoundedCornerShape(16.dp)
                 ) {
@@ -426,6 +464,7 @@ fun TelaFichaAnimal(
                 OutlinedButton(
                     // Abre diretamente a tela de acompanhamento deste animal.
                     onClick = aoAcompanharAdocao,
+                    enabled = !animal.arquivado,
                     // Mantém o botão na largura do conteúdo.
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     // Mantém o formato aprovado no PDF.
@@ -471,6 +510,44 @@ fun TelaFichaAnimal(
                         fontWeight = FontWeight.SemiBold
                     )
                 }
+                Spacer(Modifier.height(12.dp))
+
+                if (animal.arquivado) {
+                    Text(
+                        text = "Esta ficha está arquivada. Restaure para voltar a editá-la.",
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                        color = MarromFicha
+                    )
+
+                    Button(
+                        onClick = { aoRestaurar?.invoke() },
+                        enabled = aoRestaurar != null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .heightIn(min = 48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF432818),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Restaurar ficha")
+                    }
+                } else if (aoArquivar != null) {
+                    TextButton(
+                        onClick = { confirmarArquivamento = true },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                    ) {
+                        Text(
+                            text = "Arquivar ficha",
+                            color = MarromFicha,
+                            fontSize = 15.sp
+                        )
+                    }
+                }
             }
             Spacer(Modifier.height(24.dp))
         }
@@ -499,40 +576,12 @@ private fun TituloMaiorFicha(
         // Centraliza a seta e o nome verticalmente.
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
-            // Executa a ação de retorno já existente.
-            onClick = aoVoltar,
-            // Mantém a área de toque padrão.
-            modifier = Modifier.size(48.dp)
-        ) {
-            androidx.compose.foundation.Canvas(
-                // Define o tamanho e a identificação acessível da seta.
-                modifier = Modifier.size(28.dp).semantics { contentDescription = "Voltar" }
-            ) {
-                // Define a ponta da seta.
-                val ponta = androidx.compose.ui.geometry.Offset(size.width * 0.20f, size.height * 0.50f)
-                // Define as extremidades dos três segmentos.
-                val extremidades = listOf(
-                    androidx.compose.ui.geometry.Offset(size.width * 0.85f, size.height * 0.50f),
-                    androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.20f),
-                    androidx.compose.ui.geometry.Offset(size.width * 0.50f, size.height * 0.80f)
-                )
-                extremidades.forEach { fim ->
-                    drawLine(
-                        // Mantém o marrom dos controles.
-                        color = MarromFicha,
-                        // Inicia os segmentos na ponta.
-                        start = ponta,
-                        // Define a extremidade de cada segmento.
-                        end = fim,
-                        // Mantém a espessura da seta padrão.
-                        strokeWidth = 2.5.dp.toPx(),
-                        // Arredonda as pontas.
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-            }
-        }
+
+        // Usa o mesmo botão de voltar das outras telas.
+        BotaoVoltarPadrao(
+            aoVoltar = aoVoltar
+        )
+
         // Separa a seta do nome.
         Spacer(Modifier.width(8.dp))
         Text(
@@ -649,7 +698,7 @@ private fun LinhaLeituraFicha(
     }
 }
 // Guarda o resultado da leitura sem misturar fotos de animais diferentes.
-private data class EstadoFotoOriginalFicha(
+internal data class EstadoFotoOriginalFicha(
     // Identifica a fotografia à qual o resultado pertence.
     val origem: String? = null,
     // Guarda a imagem pronta para exibição.
@@ -664,7 +713,7 @@ private data class EstadoFotoOriginalFicha(
 
 // Carrega a fotografia original com redução de memória e correção de orientação.
 @Composable
-private fun lembrarFotoOriginalFicha(
+internal fun lembrarFotoOriginalFicha(
     // Recebe o endereço da imagem cadastrada.
     endereco: String?
 ): EstadoFotoOriginalFicha {
@@ -774,53 +823,40 @@ private fun lembrarFotoOriginalFicha(
     }
 }
 // Reconhece transparência real e remove apenas margens externas vazias do PNG.
+// Detecta transparência sem desfazer o enquadramento escolhido.
 private fun prepararTransparenciaFicha(
-    // Recebe a foto com a orientação já corrigida.
+    // Recebe a imagem com a orientação já corrigida.
     bitmap: Bitmap
 ): Pair<Bitmap, Boolean> {
-    // Fotos sem canal de transparência usam Crop diretamente.
+    // Imagens sem canal de transparência permanecem intactas.
     if (!bitmap.hasAlpha()) return bitmap to false
 
-    val pixels = IntArray(bitmap.width)
-    var transparente = false
-    var esquerda = bitmap.width
-    var direita = -1
-    var topo = bitmap.height
-    var base = -1
+    // Lê uma linha por vez para limitar o uso de memória.
+    val linha = IntArray(bitmap.width)
+    var temTransparencia = false
+    var temConteudo = false
 
     for (y in 0 until bitmap.height) {
-        // Lê uma linha por vez para não criar outro vetor do tamanho da imagem inteira.
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, y, bitmap.width, 1)
-        for (x in pixels.indices) {
-            val alpha = pixels[x] ushr 24
-            // Detecta áreas realmente transparentes ou parcialmente transparentes.
-            if (alpha < 250) transparente = true
-            // Localiza os limites do conteúdo visível.
-            if (alpha >= 16) {
-                esquerda = minOf(esquerda, x)
-                direita = maxOf(direita, x)
-                topo = minOf(topo, y)
-                base = maxOf(base, y)
-            }
+        bitmap.getPixels(
+            linha, 0, bitmap.width,
+            0, y, bitmap.width, 1
+        )
+
+        for (pixel in linha) {
+            // Consulta a transparência real de cada pixel.
+            val alpha = pixel ushr 24
+            if (alpha < 250) temTransparencia = true
+            if (alpha >= 16) temConteudo = true
         }
     }
-    // Um PNG sem pixels transparentes deve preencher o recipiente como uma foto comum.
-    if (!transparente) return bitmap to false
-    if (direita < esquerda || base < topo) {
+
+    // Impede cadastrar uma imagem completamente invisível.
+    if (!temConteudo) {
         throw java.io.IOException("A imagem está completamente transparente.")
     }
-    // Mantém uma pequena margem para não encostar o animal nas bordas.
-    val margem = (maxOf(direita - esquerda + 1, base - topo + 1) * 0.04f).toInt()
-    val x = (esquerda - margem).coerceAtLeast(0)
-    val y = (topo - margem).coerceAtLeast(0)
-    val limiteDireito = (direita + 1 + margem).coerceAtMost(bitmap.width)
-    val limiteInferior = (base + 1 + margem).coerceAtMost(bitmap.height)
 
-    // Retira somente os espaços transparentes excessivos; não remove cenário nem altera o animal.
-    val recorte = Bitmap.createBitmap(
-        bitmap, x, y, limiteDireito - x, limiteInferior - y
-    )
-    return recorte to true
+    // Preserva o espaço e a posição definidos pelo usuário.
+    return bitmap to temTransparencia
 }
 
 // Mostra a ficha no painel de prévia do Android Studio.

@@ -24,6 +24,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+
+import androidx.compose.ui.tooling.preview.Preview
 
 // CORES ORIGINAIS DO GERENCIACÃO
 private val FundoRecuperar = Color(0xFFFFFCF7)
@@ -60,26 +67,17 @@ fun TelaEsqueciSenha(
 
         Spacer(Modifier.height(15.dp))
 
-        // SETA PARA VOLTAR AO LOGIN
-        TextButton(
-            onClick = aoVoltarLogin,
-            contentPadding = PaddingValues(0.dp)
-        ) {
-            Text(
-                text = "← Voltar",
-                fontSize = 16.sp,
-                color = MarromRecuperar,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
+        // Mantém a posição original e utiliza o botão compartilhado.
+        BotaoVoltarPadrao(
+            aoVoltar = aoVoltarLogin,
+            descricao = "Voltar para entrar"
+        )
 
         Spacer(Modifier.height(30.dp))
 
-        // LOGOTIPO ORIGINAL
+        // Restaura o tamanho e o posicionamento anteriores da logo.
         Image(
-            painter = painterResource(
-                id = R.drawable.tipografialogin
-            ),
+            painter = painterResource(R.drawable.tipografialogin),
             contentDescription = "GerenciaCÃO",
             modifier = Modifier
                 .width(230.dp)
@@ -87,8 +85,7 @@ fun TelaEsqueciSenha(
                 .align(Alignment.CenterHorizontally),
             contentScale = ContentScale.Fit
         )
-
-        Spacer(Modifier.height(45.dp))
+        Spacer(Modifier.height(20.dp))
 
         // TÍTULO
         Text(
@@ -214,3 +211,18 @@ fun TelaEsqueciSenha(
     }
 }
 
+// Mostra a tela de recuperação de senha no Preview.
+@Preview(
+    name = "Recuperar senha",
+    showBackground = true,
+    widthDp = 412,
+    heightDp = 917
+)
+@Composable
+private fun PreviaTelaEsqueciSenha() {
+    MaterialTheme {
+        TelaEsqueciSenha(
+            aoVoltarLogin = {}
+        )
+    }
+}

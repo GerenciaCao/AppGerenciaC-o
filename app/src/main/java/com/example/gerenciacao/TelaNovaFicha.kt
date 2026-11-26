@@ -23,6 +23,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import android.net.Uri
+import androidx.core.content.FileProvider
+import java.io.File
+
 // Usa os mesmos campos na criação e na edição da ficha.
 @Composable
 fun TelaNovaFicha(
@@ -45,6 +49,12 @@ fun TelaNovaFicha(
 ) {
     // Guarda os dados básicos durante a edição e as rotações do aparelho.
     var nome by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.nome.orEmpty()) }
+    // Recupera a situação na edição e inicia novos cadastros como Disponível.
+    var situacao by rememberSaveable(animalInicial?.id) {
+        mutableStateOf(
+            animalInicial?.situacao?.takeIf { it.isNotBlank() } ?: "Disponível"
+        )
+    }
     var especie by rememberSaveable(animalInicial?.id) {
         mutableStateOf(animalInicial?.especie?.takeUnless { it == "Não informada" }.orEmpty())
     }
@@ -66,14 +76,38 @@ fun TelaNovaFicha(
     var historico by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.historicoMedico.orEmpty()) }
     var fotoUri by rememberSaveable(animalInicial?.id) { mutableStateOf(animalInicial?.fotoUri) }
     var tentou by rememberSaveable(animalInicial?.id) { mutableStateOf(false) }
-    var confirmarArquivo by rememberSaveable { mutableStateOf(false) }
     var aviso by rememberSaveable { mutableStateOf<String?>(null) }
     val contexto = LocalContext.current
-    val miniatura = lembrarFotoMeuPerfil(fotoUri)
+    // Usa a mesma correção de orientação aplicada na ficha individual.
+    val estadoFotoFormulario = lembrarFotoOriginalFicha(fotoUri)
+    val miniatura = estadoFotoFormulario.imagem
+
+    // Preserva a imagem original para futuros reenquadramentos.
+    var fotoOriginalUri by rememberSaveable(animalInicial?.id) {
+        mutableStateOf(
+            animalInicial?.fotoOriginalUri ?: animalInicial?.fotoUri
+        )
+    }
+
+    // Guarda a foto que está sendo ajustada, sem substituir a anterior.
+    var fotoParaEnquadrar by rememberSaveable(animalInicial?.id) {
+        mutableStateOf<String?>(null)
+    }
+    // Controla o menu de escolha entre câmera e galeria.
+    var mostrarOpcoesFoto by rememberSaveable(animalInicial?.id) {
+        mutableStateOf(false)
+    }
+
+// Preserva o destino da captura enquanto a câmera está aberta.
+    var fotoCameraPendente by rememberSaveable(animalInicial?.id) {
+        mutableStateOf<String?>(null)
+    }
 
     // Detecta alterações em todos os campos antes de permitir sair sem salvar.
-    val alterado = nome != animalInicial?.nome.orEmpty() ||
-            especie != animalInicial?.especie?.takeUnless { it == "Não informada" }.orEmpty() ||
+    val alterado =
+        situacao != (animalInicial?.situacao?.takeIf { it.isNotBlank() } ?: "Disponível") ||
+                nome != animalInicial?.nome.orEmpty() ||
+                especie != animalInicial?.especie?.takeUnless { it == "Não informada" }.orEmpty() ||
             sexo != (animalInicial?.sexo ?: "Não informado") ||
             raca != animalInicial?.raca.orEmpty() || idade != animalInicial?.idade.orEmpty() ||
             porte != animalInicial?.porte.orEmpty() || cor != animalInicial?.corPelagem.orEmpty() ||
@@ -94,9 +128,156 @@ fun TelaNovaFicha(
         if (uri != null) {
             runCatching {
                 contexto.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }.onSuccess { fotoUri = uri.toString() }
+            }// Abre o editor antes de aplicar a nova foto.
+                .onSuccess { fotoParaEnquadrar = uri.toString() }
                 .onFailure { aviso = "Não foi possível manter o acesso à foto. Escolha outra imagem." }
         }
+    }
+
+// Recebe o resultado do aplicativo de câmera.
+    val tirarFoto = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { sucesso ->
+        val endereco = fotoCameraPendente
+        fotoCameraPendente = null
+
+        if (sucesso && endereco != null) {
+            // Abre o mesmo editor utilizado pelas imagens da galeria.
+            fotoParaEnquadrar = endereco
+        } else if (endereco != null) {
+            // Remove o arquivo vazio quando a captura é cancelada.
+            runCatching {
+                contexto.contentResolver.delete(
+                    Uri.parse(endereco),
+                    null,
+                    null
+                )
+            }
+        }
+    }
+
+// Mostra as opções ao tocar na área da foto ou em Alterar imagem.
+    if (mostrarOpcoesFoto) {
+        AlertDialog(
+            onDismissRequest = { mostrarOpcoesFoto = false },
+            containerColor = Color.White,
+            shape = RoundedCornerShape(24.dp),
+            title = {
+                Text(
+                    text = "Adicionar foto",
+                    fontWeight = FontWeight.Bold,
+                    color = MarromPadraoApp
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Button(
+                        onClick = {
+                            mostrarOpcoesFoto = false
+
+                            // Guarda o arquivo original para permitir reenquadrar depois.
+                            var arquivoCriado: File? = null
+
+                            try {
+                                val pasta = File(
+                                    contexto.filesDir,
+                                    "fotos_camera"
+                                )
+
+                                check(pasta.exists() || pasta.mkdirs())
+
+                                val arquivo = File.createTempFile(
+                                    "animal_",
+                                    ".jpg",
+                                    pasta
+                                )
+                                arquivoCriado = arquivo
+
+                                // Fornece à câmera acesso somente ao arquivo da captura.
+                                val uri = FileProvider.getUriForFile(
+                                    contexto,
+                                    "${contexto.packageName}.fotos",
+                                    arquivo
+                                )
+
+                                fotoCameraPendente = uri.toString()
+                                tirarFoto.launch(uri)
+                            } catch (erro: Exception) {
+                                // Mantém a foto anterior se a câmera não puder abrir.
+                                arquivoCriado?.delete()
+                                fotoCameraPendente = null
+                                aviso = "Não foi possível abrir a câmera. Você pode escolher uma foto da galeria."
+                            }
+                        },
+                        enabled = fotoCameraPendente == null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MarromPadraoApp,
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text(
+                            text = "Tirar foto",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            mostrarOpcoesFoto = false
+
+                            // Mantém o seletor de imagens que já existe.
+                            escolherFoto.launch(arrayOf("image/*"))
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 52.dp),
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Text(
+                            text = "Escolher da galeria",
+                            fontSize = 16.sp,
+                            color = MarromPadraoApp
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { mostrarOpcoesFoto = false }
+                ) {
+                    Text(
+                        text = "Cancelar",
+                        color = MarromPadraoApp
+                    )
+                }
+            }
+        )
+    }
+
+    // Apresenta o editor quando uma imagem é escolhida.
+    fotoParaEnquadrar?.let { original ->
+        DialogoEnquadrarFotoAnimal(
+            // Sempre permite ajustar a imagem original.
+            origem = original,
+            // Mantém a foto anterior quando o usuário cancela.
+            aoCancelar = {
+                fotoParaEnquadrar = null
+            },
+            // Atualiza a prévia somente depois da confirmação.
+            aoConfirmar = { recorte ->
+                fotoOriginalUri = original
+                fotoUri = recorte
+                fotoParaEnquadrar = null
+            }
+        )
     }
 
     // Aplica a mesma confirmação ao botão do sistema e às saídas da tela.
@@ -139,9 +320,10 @@ fun TelaNovaFicha(
                 )
                 Surface(
                     // Permite escolher ou trocar a imagem tocando na área da foto.
-                    onClick = { escolherFoto.launch(arrayOf("image/*")) },
+                    onClick = { mostrarOpcoesFoto = true },
                     // Mantém um espaço uniforme para a imagem no formulário.
-                    modifier = Modifier.fillMaxWidth().height(132.dp),
+                    // Usa a mesma proporção do editor e da ficha individual.
+                    modifier = Modifier.fillMaxWidth().aspectRatio(4f / 3f),
                     // Mantém os cantos arredondados.
                     shape = RoundedCornerShape(18.dp),
                     // Usa o azul padrão atrás da imagem transparente do animal.
@@ -155,8 +337,12 @@ fun TelaNovaFicha(
                             contentDescription = "Foto do animal; toque para alterar",
                             // Ocupa o espaço da imagem.
                             modifier = Modifier.fillMaxSize(),
-                            // Mantém a foto inteira durante o preenchimento.
-                            contentScale = ContentScale.Fit
+                            // Usa o mesmo comportamento de exibição da ficha individual.
+                            contentScale = if (estadoFotoFormulario.transparente) {
+                                ContentScale.Fit
+                            } else {
+                                ContentScale.Crop
+                            }
                         )
                     } else {
                         Column(
@@ -185,10 +371,53 @@ fun TelaNovaFicha(
                     TextButton(
                         // Mantém acessível a troca da foto.
                         onClick = { escolherFoto.launch(arrayOf("image/*")) }
-                    ) { Text("Alterar imagem", color = MarromPadraoApp) }
+                    ) { Text("Alterar imagem", color = MarromPadraoApp)}
+                    if (fotoUri != null) {
+                        TextButton(
+                            // Reabre a foto original para permitir outro enquadramento.
+                            onClick = {
+                                fotoParaEnquadrar = fotoOriginalUri ?: fotoUri
+                            }
+                        ) {
+                            Text(
+                                // Identifica o ajuste manual.
+                                text = "Editar enquadramento",
+                                // Mantém a cor dos controles.
+                                color = MarromPadraoApp
+                            )
+                        }
+                     }
                 }
                 SecaoFormularioAnimal("Informações básicas")
                 CampoFormularioAnimal("Nome", nome, { nome = it }, "Ex.: Lua", erro = if (tentou) erroNome else null)
+                SeletorRestante(
+                    rotulo = "Situação do animal",
+                    valor = situacao,
+                    // Mantém as situações já utilizadas nas fichas e nos filtros.
+                    opcoes = (
+                            listOf(
+                                "Disponível",
+                                "No abrigo",
+                                "Visita marcada",
+                                "Em tratamento",
+                                "Adotado"
+                            ) + situacao
+                            ).distinct().map { it to it },
+                    selecionar = { situacao = it }
+                )
+
+                Text(
+                    text = when (situacao) {
+                        "Disponível" -> "Pode ser adotado."
+                        "No abrigo" -> "Está acolhido, mas ainda não está disponível para adoção."
+                        "Visita marcada" -> "Tem uma visita de adoção agendada."
+                        "Em tratamento" -> "Está recebendo cuidados de saúde."
+                        "Adotado" -> "Já foi adotado e não ocupa uma vaga no abrigo."
+                        else -> "Você pode atualizar a situação ao editar a ficha."
+                    },
+                    fontSize = 13.sp,
+                    color = MarromPadraoApp
+                )
                 SeletorRestante(
                     // Mostra os nomes amigáveis e salva os valores esperados pelos filtros.
                     rotulo = "Espécie",
@@ -219,9 +448,8 @@ fun TelaNovaFicha(
                     CampoFormularioAnimal("Histórico anterior", historico, { historico = it }, "Registros já cadastrados", longo = true)
                 }
 
-                SecaoFormularioAnimal("Descrição e comportamento")
+                SecaoFormularioAnimal("Descrição e observações")
                 CampoFormularioAnimal("Descrição", descricao, { descricao = it }, "Informe uma breve descrição do animal", longo = true)
-                CampoFormularioAnimal("Personalidade e comportamento", comportamento, { comportamento = it }, "Ex.: dócil, brincalhão, agitado...", longo = true)
                 CampoFormularioAnimal("Observações adicionais", observacoes, { observacoes = it }, "Outras informações importantes...", longo = true)
                 Row(
                     // Mantém as ações finais lado a lado, como na referência.
@@ -247,12 +475,16 @@ fun TelaNovaFicha(
                                 } ?: idade.trim()
                                 // Preserva o ID, a situação e o arquivamento durante a edição.
                                 val base = animalInicial ?: AnimalExemplo(
-                                    nome = nome.trim(), idade = idadeFinal, situacao = "No abrigo"
+                                    nome = nome.trim(), idade = idadeFinal, situacao = situacao
                                 )
                                 aoSalvar(base.copy(
+                                    // Salva a situação tanto no cadastro quanto na edição.
+                                    situacao = situacao,
                                     nome = nome.trim(), especie = especie, sexo = sexo,
                                     raca = raca.trim(), idade = idadeFinal, porte = porte,
                                     corPelagem = cor.trim(), castrado = castrado, fotoUri = fotoUri,
+                                    // Guarda o original junto da versão enquadrada.
+                                    fotoOriginalUri = fotoOriginalUri,
                                     vacinacoes = vacinacoes.trim(), condicoesSaude = condicoes.trim(),
                                     medicamentos = medicamentos.trim(), sobre = descricao.trim(),
                                     comportamento = comportamento.trim(), observacoes = observacoes.trim(),
@@ -271,38 +503,11 @@ fun TelaNovaFicha(
                         )
                     ) { Text("Salvar", fontWeight = FontWeight.Bold) }
                 }
-                if (animalInicial != null && aoArquivar != null) {
-                    TextButton(
-                        // Preserva a ação de arquivamento da tela de edição.
-                        onClick = { confirmarArquivo = true },
-                        // Mantém a ação abaixo dos botões principais.
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Arquivar ficha", color = MarromPadraoApp) }
-                }
+
             }
         }
     }
-    if (confirmarArquivo && animalInicial != null && aoArquivar != null) {
-        AlertDialog(
-            // Cancela o arquivamento ao fechar a janela.
-            onDismissRequest = { confirmarArquivo = false },
-            // Identifica o animal que será arquivado.
-            title = { Text("Arquivar " + animalInicial.nome + "?") },
-            // Explica que o cadastro não será excluído.
-            text = { Text("A ficha sairá da lista ativa. Os dados serão mantidos; alterações não salvas serão descartadas.") },
-            // Confirma a ação já existente.
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmarArquivo = false
-                    aoArquivar(animalInicial.id)
-                }) { Text("Arquivar") }
-            },
-            // Permite desistir sem mudar o cadastro.
-            dismissButton = {
-                TextButton(onClick = { confirmarArquivo = false }) { Text("Cancelar") }
-            }
-        )
-    }
+
     // Mostra mensagens sem apagar os dados preenchidos.
     aviso?.let { MensagemRestante(it) { aviso = null } }
 }

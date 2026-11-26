@@ -187,7 +187,12 @@ fun MolduraPadraoApp(
         topBar = { CabecalhoPadraoApp(interceptarCabecalho) },
         bottomBar = bottomBar,
         snackbarHost = snackbarHost,
-        floatingActionButton = floatingActionButton,
+        // Mantém os botões antigos disponíveis no código, mas ocultos.
+                floatingActionButton = {
+            if (MOSTRAR_ADICIONAR_FLUTUANTE) {
+                floatingActionButton()
+            }
+        },
         floatingActionButtonPosition = FabPosition.End
     ) { espacos ->
         // Preserva os cantos arredondados e evita aplicar o espaçamento duas vezes.
@@ -203,7 +208,55 @@ fun MolduraPadraoApp(
     }
 }
 
-// Padroniza os títulos e o botão de voltar das telas internas.
+// Compartilha o mesmo botão de voltar entre as telas.
+@Composable
+fun BotaoVoltarPadrao(
+    aoVoltar: () -> Unit,
+    modifier: Modifier = Modifier,
+    descricao: String = "Voltar"
+) {
+    FilledIconButton(
+        onClick = aoVoltar,
+        modifier = modifier
+            // Mantém uma área de toque confortável.
+            .size(48.dp)
+            .semantics {
+                contentDescription = descricao
+            },
+        shape = CircleShape,
+        colors = IconButtonDefaults.filledIconButtonColors(
+            // Usa o mesmo marrom do botão Demonstração.
+            containerColor = Color(0xFF432818),
+            contentColor = Color.White
+        )
+    ) {
+        Canvas(Modifier.size(28.dp)) {
+            val ponta = Offset(
+                size.width * 0.20f,
+                size.height * 0.50f
+            )
+
+            val extremidades = listOf(
+                Offset(size.width * 0.85f, size.height * 0.50f),
+                Offset(size.width * 0.50f, size.height * 0.20f),
+                Offset(size.width * 0.50f, size.height * 0.80f)
+            )
+
+            extremidades.forEach { destino ->
+                drawLine(
+                    // Garante contraste com o círculo marrom.
+                    color = Color.White,
+                    start = ponta,
+                    end = destino,
+                    strokeWidth = 2.5.dp.toPx(),
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+// Mantém o botão de voltar ao lado do título nas telas internas.
 @Composable
 fun TituloPaginaPadrao(
     titulo: String,
@@ -217,65 +270,11 @@ fun TituloPaginaPadrao(
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (aoVoltar != null) {
-            // Mantém uma área de toque confortável para voltar.
-            IconButton(
-                onClick = aoVoltar,
-                modifier = Modifier
-                    .size(48.dp)
-                    .semantics {
-                        contentDescription = "Voltar"
-                    }
-            ) {
-                // Desenha uma seta visível, sem depender do tamanho de uma letra.
-                Canvas(Modifier.size(28.dp)) {
-                    val espessura = 2.5.dp.toPx()
-                    val ponta = Offset(
-                        size.width * 0.20f,
-                        size.height * 0.50f
-                    )
-
-                    // Haste horizontal da seta.
-                    drawLine(
-                        color = MarromPadraoApp,
-                        start = ponta,
-                        end = Offset(
-                            size.width * 0.85f,
-                            size.height * 0.50f
-                        ),
-                        strokeWidth = espessura,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-
-                    // Parte superior da ponta.
-                    drawLine(
-                        color = MarromPadraoApp,
-                        start = ponta,
-                        end = Offset(
-                            size.width * 0.50f,
-                            size.height * 0.20f
-                        ),
-                        strokeWidth = espessura,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-
-                    // Parte inferior da ponta.
-                    drawLine(
-                        color = MarromPadraoApp,
-                        start = ponta,
-                        end = Offset(
-                            size.width * 0.50f,
-                            size.height * 0.80f
-                        ),
-                        strokeWidth = espessura,
-                        cap = androidx.compose.ui.graphics.StrokeCap.Round
-                    )
-                }
-            }
+            BotaoVoltarPadrao(aoVoltar = aoVoltar)
 
             Spacer(Modifier.width(8.dp))
         }
 
-        // Alinha o título ao centro vertical do botão.
         Text(
             text = titulo,
             modifier = Modifier.weight(1f),
@@ -334,5 +333,30 @@ private fun PreviaTelaPadraoApp() {
                 aoAdicionar = {}
             )
         }
+    }
+}
+
+// Troque para true caso queira reativar os botões flutuantes.
+private const val MOSTRAR_ADICIONAR_FLUTUANTE = false
+
+@Composable
+fun BotaoAcaoTitulo(
+    texto: String,
+    aoClicar: () -> Unit
+) {
+    Button(
+        onClick = aoClicar,
+        modifier = Modifier.heightIn(min = 48.dp),
+        shape = RoundedCornerShape(24.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFFFFB21C),
+            contentColor = Color(0xFF432818)
+        )
+    ) {
+        Text(
+            text = "+ $texto",
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
     }
 }

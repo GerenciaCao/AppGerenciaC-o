@@ -28,6 +28,14 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
 
 // Adicionando a Preview
 import androidx.compose.ui.tooling.preview.Preview
@@ -73,34 +81,23 @@ fun TelaCadastro(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        // CABEÇALHO
+        // Preserva a logo centralizada e a posição da seta à esquerda.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(108.dp)
+                .height(108.dp),
+            contentAlignment = Alignment.Center
         ) {
+            Logolaranja(modifier = Modifier)
 
-            TextButton(
-                onClick = aoVoltarLogin,
-                modifier = Modifier.align(
-                    Alignment.CenterStart
-                )
-            ) {
-                Text(
-                    text = "←",
-                    fontSize = 26.sp,
-                    color = MarromCadastro
-                )
-            }
-
-            Logolaranja(
-                modifier = Modifier.align(
-                    Alignment.Center
-                ),
+            BotaoVoltarPadrao(
+                aoVoltar = aoVoltarLogin,
+                modifier = Modifier.align(Alignment.CenterStart),
+                descricao = "Voltar para entrar"
             )
         }
 
-        // TÍTULO
+// Mantém o título abaixo do cabeçalho, sem seta ao lado.
         Text(
             text = "Criar sua conta",
             modifier = Modifier.fillMaxWidth(),
@@ -131,15 +128,18 @@ fun TelaCadastro(
 
         Spacer(Modifier.height(15.dp))
 
-        // TELEFONE
+        // Guarda somente os números; a pontuação aparece apenas na tela.
         CampoCadastro(
             titulo = "Telefone",
             valor = telefone,
-            aoAlterar = {
-                telefone = formatarTelefoneCadastro(it)
+            aoAlterar = { novoValor ->
+                telefone = novoValor
+                    .filter { it in '0'..'9' }
+                    .take(11)
             },
             exemplo = "(11) 99999-9999",
-            tipoTeclado = KeyboardType.Phone
+            tipoTeclado = KeyboardType.Phone,
+            transformacao = MascaraTelefoneCadastro
         )
 
         Spacer(Modifier.height(15.dp))
@@ -270,7 +270,9 @@ private fun CampoCadastro(
     aoAlterar: (String) -> Unit,
     exemplo: String,
     tipoTeclado: KeyboardType,
-    campoSenha: Boolean = false
+    campoSenha: Boolean = false,
+    // Permite formatar a exibição sem modificar o texto digitado.
+    transformacao: VisualTransformation = VisualTransformation.None
 ) {
     var mostrarSenha by rememberSaveable {
         mutableStateOf(false)
@@ -311,7 +313,7 @@ private fun CampoCadastro(
             ) {
                 PasswordVisualTransformation()
             } else {
-                VisualTransformation.None
+                transformacao
             },
             trailingIcon = if (campoSenha) {
                 {
@@ -454,6 +456,47 @@ private fun PreviaTelaCadastro() {
             aoVoltarLogin = {},
             // Dispensa a navegação após o cadastro na prévia.
             aoConcluirCadastro = { _ -> }
+        )
+    }
+}
+
+// Exibe o telefone formatado sem inserir pontuação no valor do campo.
+private object MascaraTelefoneCadastro : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        // Reutiliza a formatação de telefone que já existe no arquivo.
+        val formatado = formatarTelefoneCadastro(text.text)
+
+        // Identifica onde cada número aparece no texto formatado.
+        val posicoesNumeros = formatado.indices.filter {
+            formatado[it] in '0'..'9'
+        }
+
+        val mapeamento = object : OffsetMapping {
+            override fun originalToTransformed(offset: Int): Int {
+                // Posiciona o cursor considerando parênteses, espaço e hífen.
+                val posicao = offset.coerceIn(0, text.length)
+
+                return if (posicao < posicoesNumeros.size) {
+                    posicoesNumeros[posicao]
+                } else {
+                    formatado.length
+                }
+            }
+
+            override fun transformedToOriginal(offset: Int): Int {
+                // Converte o toque no texto formatado para a posição nos números.
+                val posicao = offset.coerceIn(0, formatado.length)
+
+                return formatado
+                    .take(posicao)
+                    .count { it in '0'..'9' }
+                    .coerceIn(0, text.length)
+            }
+        }
+
+        return TransformedText(
+            text = AnnotatedString(formatado),
+            offsetMapping = mapeamento
         )
     }
 }

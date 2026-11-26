@@ -78,9 +78,21 @@ fun TelaInicio(
     aoRegistrarDoacao: (() -> Unit)? = null,
     aoRegistrarDespesa: (() -> Unit)? = null,
     compromissos: List<CompromissoAbrigo> = emptyList(),
+    // Recebe as fichas para localizar a foto do animal vinculado.
+    animais: List<AnimalExemplo> = emptyList(),
+    // Abre os detalhes do compromisso selecionado.
+    aoAbrirCompromisso: (String) -> Unit = { aoAgenda() },
     aoAbrirParcerias: (() -> Unit)? = null,
     aoEncontrarCuidadores: (() -> Unit)? = null,
     imagemParceria: Int? = null,
+    // Recebe a quantidade de animais atualmente acolhidos.
+    totalAnimaisNoAbrigo: Int = 0,
+    // Recebe a quantidade de animais que já foram adotados.
+    totalAnimaisAdotados: Int = 0,
+    // Recebe a capacidade cadastrada em Meu abrigo.
+    capacidadeAbrigo: Int = 0,
+    // Abre os dados do abrigo pelo indicador de ocupação.
+    aoVerDadosAbrigo: () -> Unit = {},
     // Recebe a data do compromisso tocado no aviso do Início.
     aoAbrirAgendaNaData: (String) -> Unit = { aoAgenda() }
 ) {
@@ -138,9 +150,8 @@ fun TelaInicio(
     )) {
         // Liga o botão ao espaço flutuante da moldura, separado da barra inferior.
         MolduraPadraoApp(
-            floatingActionButton = {
-                BotaoAdicionarFlutuante(aoAdicionar = aoAdicionar)
-            },
+            // Esconde o botão + no Início, que já possui ações rápidas.
+            floatingActionButton = {},
             bottomBar = {
                 MenuInferiorInicio(
                     avisar = avisar,
@@ -156,22 +167,27 @@ fun TelaInicio(
                 translationY = if (modoPrevia) 0f else (1f - entrada) * 12.dp.toPx()
             }.verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp).padding(top = 22.dp, bottom = 28.dp)) {
-                // Mostra os compromissos do dia dentro do conteúdo, acima do banner.
-                // Usa os registros já recebidos da agenda, sem fixar nomes ou datas.
-                AvisoCuidadosHojeInicio(
-                    compromissos = compromissos,
-                    hoje = hoje,
-                    horarioAtual = horarioAtual,
-                    // Abre o dia do compromisso; sem registro, abre a agenda normalmente.
-                    aoAbrirAgenda = { data ->
-                        if (data != null) aoAbrirAgendaNaData(data) else aoAgenda()
-                    }
+                // Posiciona o carrossel no topo do conteúdo.
+                CarrosselAutomaticoInicio(
+                    // Mantém o direcionamento do banner para a Loja.
+                    aoAbrirParcerias = abrirLojaBanner
                 )
-                // Aumenta o espaço entre o aviso e o banner.
-                Spacer(Modifier.height(28.dp))
-                CarrosselAutomaticoInicio(aoAbrirParcerias = abrirLojaBanner)
-                Spacer(Modifier.height(14.dp))
-                Text("Ações rápidas", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextoInicio)
+
+                // Separa o aviso das ações rápidas.
+                Spacer(Modifier.height(22.dp))
+
+                // Identifica a seção de atalhos.
+                Text(
+                    text = "Ações rápidas",
+                    // Mantém o tamanho dos outros títulos da tela.
+                    fontSize = 18.sp,
+                    // Destaca o título.
+                    fontWeight = FontWeight.Bold,
+                    // Usa a cor principal do aplicativo.
+                    color = TextoInicio
+                )
+
+                // Separa o título dos botões.
                 Spacer(Modifier.height(12.dp))
 
                 // Atalhos menores: icone a esquerda e texto ao lado, com rolagem horizontal.
@@ -186,19 +202,42 @@ fun TelaInicio(
                         AtalhoCompactoInicio("Registrar despesa", R.drawable.inicio_recibo, Color(0xFF432818), largura) {
                             aoRegistrarDespesa?.invoke() ?: avisar("O registro de despesas estará disponível em breve.")
                         }
-                        AtalhoCompactoInicio("Ver bichinhos", R.drawable.iconanimais, Color(0xFF432818), largura) { aoAbrirAnimais() }
                     }
                 }
                 Spacer(Modifier.height(18.dp))
 
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Próximos cuidados", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TextoInicio)
-                    TextButton(onClick = aoAgenda, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                        Text("Ver todos", fontSize = 12.sp, color = MarromInicio, fontWeight = FontWeight.SemiBold)
-                    }
-                }
+                AgendaPilulasInicio(
+                    // Recebe os compromissos cadastrados.
+                    compromissos = compromissos,
+                    // Recebe os animais e suas fotos.
+                    animais = animais,
+                    // Define o começo da sequência de dias.
+                    hoje = hoje,
+                    // Abre o calendário completo.
+                    aoAbrirAgenda = aoAgenda,
+                    // Abre uma data específica.
+                    aoAbrirDia = aoAbrirAgendaNaData,
+                    // Abre os detalhes ao tocar no cartão.
+                    aoAbrirCompromisso = aoAbrirCompromisso
+                )
 
-                Spacer(Modifier.height(15.dp))
+                // Separa a agenda do indicador.
+                Spacer(Modifier.height(22.dp))
+
+                // Apresenta as três estatísticas do abrigo.
+                OcupacaoAbrigoInicio(
+                    // Animais que atualmente ocupam vagas.
+                    totalAnimais = totalAnimaisNoAbrigo,
+                    // Animais que já foram adotados.
+                    adotados = totalAnimaisAdotados,
+                    // Capacidade cadastrada em Meu abrigo.
+                    capacidade = capacidadeAbrigo,
+                    // Abre as informações do abrigo.
+                    aoVerDados = aoVerDadosAbrigo
+                )
+
+                // Separa a ocupação do cartão de redes de conexões.
+                Spacer(Modifier.height(22.dp))
 
                 // Reserva o acesso solicitado, sem consultar localizacao ou mostrar resultados ficticios.
                 Surface(onClick = {
@@ -783,6 +822,8 @@ private fun BannerParceriasNativoInicio(
                     // Distribui título, descrição e botão sem sobreposição.
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
+
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         // Título do banner, editável diretamente no Kotlin.
                         text = "Cuidar do seu pet custa menos!",
@@ -796,17 +837,6 @@ private fun BannerParceriasNativoInicio(
                         fontWeight = FontWeight.ExtraBold
                     )
 
-                    Text(
-                        // Descrição curta para não competir com o título.
-                        text = "Ofertas dos nossos parceiros\npara cuidar de quem você acolhe.",
-                        // Usa marrom para leitura sobre o laranja.
-                        color = TextoInicio,
-                        // Mantém a descrição menor que o título.
-                        fontSize = 12.sp,
-                        // Define o espaçamento das linhas da descrição.
-                        lineHeight = 12.sp
-                    )
-
                     Button(
                         // Redireciona para a Loja pelo destino compartilhado do app.
                         onClick = aoAbrirLoja,
@@ -816,7 +846,7 @@ private fun BannerParceriasNativoInicio(
                         // Arredonda o botão sem transformá-lo em uma cápsula.
                         shape = RoundedCornerShape(12.dp),
                         // Controla o espaço interno da legenda.
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                        contentPadding = PaddingValues(horizontal = 15.dp, vertical = 6.dp),
                         // Define as cores do botão e do texto.
                         colors = ButtonDefaults.buttonColors(
                             // Fundo azul seguindo a paleta do marketing.
@@ -829,11 +859,12 @@ private fun BannerParceriasNativoInicio(
                             // Legenda da ação.
                             text = "Ir para Loja",
                             // Tamanho da legenda.
-                            fontSize = 11.sp,
+                            fontSize = 15.sp,
                             // Espaçamento vertical das linhas da legenda.
                             lineHeight = 14.sp,
                             // Destaca o botão com texto em negrito.
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            color = Color(0xFFFFFCF7)
                         )
                     }
                 }
@@ -854,6 +885,485 @@ private fun BannerParceriasNativoInicio(
                     alignment = Alignment.BottomEnd
                 )
             }
+        }
+    }
+}
+        // Exibe os próximos sete dias e os compromissos do dia selecionado.
+        @Composable
+        private fun AgendaPilulasInicio(
+        // Compromissos disponíveis para cada dia.
+        compromissos: List<CompromissoAbrigo>,
+          // Fichas usadas para identificar o animal e sua foto.
+         animais: List<AnimalExemplo>,
+         // Data atual.
+         hoje: String,
+         // Navegação para o calendário completo.
+         aoAbrirAgenda: () -> Unit,
+          // Navegação para uma data específica.
+         aoAbrirDia: (String) -> Unit,
+          // Navegação para os detalhes do compromisso.
+         aoAbrirCompromisso: (String) -> Unit
+) {
+            // Guarda o dia expandido e fecha a seleção quando a data atual muda.
+            var diaAberto by rememberSaveable(hoje) {
+                mutableStateOf<String?>(null)
+            }
+
+            // Gera datas completas, inclusive ao atravessar meses e anos.
+            val dias = remember(hoje) {
+                val formato = SimpleDateFormat("dd/MM/yyyy", Locale.ROOT)
+                val formatoSemana = SimpleDateFormat(
+                    "EEE",
+                    Locale("pt", "BR")
+                )
+                val calendario = java.util.Calendar.getInstance().apply {
+                    time = requireNotNull(formato.parse(hoje))
+                }
+
+                List(7) { indice ->
+                    val dataDia = calendario.clone() as java.util.Calendar
+                    dataDia.add(java.util.Calendar.DAY_OF_MONTH, indice)
+
+                    Triple(
+                        formato.format(dataDia.time),
+                        dataDia.get(java.util.Calendar.DAY_OF_MONTH),
+                        formatoSemana.format(dataDia.time)
+                            .replace(".", "")
+                            .uppercase(Locale("pt", "BR"))
+                    )
+                }
+            }
+
+            // Filtra os compromissos do dia escolhido.
+            val registros = compromissos
+                .filter { it.data == diaAberto }
+                .sortedBy { it.horario }
+
+            Column(
+                // Ocupa a largura do conteúdo.
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    // Distribui título e acesso ao calendário.
+                    modifier = Modifier.fillMaxWidth(),
+                    // Alinha os dois elementos verticalmente.
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        // Identifica a seção.
+                        text = "Agenda",
+                        // Reserva espaço para o botão à direita.
+                        modifier = Modifier.weight(1f),
+                        // Mantém o padrão dos títulos da tela inicial.
+                        fontSize = 18.sp,
+                        // Destaca o título.
+                        fontWeight = FontWeight.Bold,
+                        // Usa o texto principal do aplicativo.
+                        color = TextoInicio
+                    )
+
+                    TextButton(
+                        // Abre a agenda completa.
+                        onClick = aoAbrirAgenda
+                    ) {
+                        Text(
+                            // Identifica a navegação.
+                            text = "Ver agenda",
+                            // Mantém a cor dos links.
+                            color = MarromInicio,
+                            // Define o tamanho do link.
+                            fontSize = 12.sp
+                        )
+                    }
+                }
+
+                Row(
+                    // Permite rolar em celulares com largura menor.
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    // Separa as pílulas.
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    dias.forEach { (data, numero, semana) ->
+                        // Identifica a pílula selecionada.
+                        val selecionado = diaAberto == data
+                        // Verifica compromissos de qualquer categoria.
+                        val temCompromisso = compromissos.any {
+                            it.data == data
+                        }
+
+                        Surface(
+                            // Um segundo toque no mesmo dia recolhe os detalhes.
+                            onClick = {
+                                diaAberto = if (selecionado) null else data
+                            },
+                            // Define uma área de toque confortável.
+                            modifier = Modifier
+                                .width(48.dp)
+                                .heightIn(min = 76.dp)
+                                .semantics {
+                                    contentDescription = data +
+                                            if (temCompromisso) {
+                                                ", com compromissos"
+                                            } else {
+                                                ", sem compromissos"
+                                            }
+                                },
+                            // Deixa o formato de pílula.
+                            shape = RoundedCornerShape(24.dp),
+                            // Usa laranja na seleção e vermelho claro nos dias agendados.
+                            color = when {
+                                selecionado -> Color(0xFFFFAE49)
+                                temCompromisso -> Color(0xFFFFC5C5)
+                                else -> Color.White
+                            },
+                            // Destaca hoje mesmo quando a pílula não está selecionada.
+                            border = BorderStroke(
+                                1.dp,
+                                if (data == hoje) {
+                                    Color(0xFFFFAE49)
+                                } else {
+                                    BordaInicio
+                                }
+                            )
+                        ) {
+                            Column(
+                                // Mantém os textos afastados das bordas.
+                                modifier = Modifier.padding(vertical = 12.dp),
+                                // Centraliza o número e o dia da semana.
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                // Separa os dois textos.
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    // Mostra o número do dia.
+                                    text = numero.toString(),
+                                    // Dá destaque ao número.
+                                    fontSize = 19.sp,
+                                    // Mantém boa leitura.
+                                    fontWeight = FontWeight.Bold,
+                                    // Usa contraste sobre os fundos claros.
+                                    color = TextoInicio
+                                )
+
+                                Text(
+                                    // Mostra a abreviação do dia da semana.
+                                    text = semana,
+                                    // Mantém a abreviação compacta.
+                                    fontSize = 11.sp,
+                                    // Usa a mesma cor do número.
+                                    color = TextoInicio
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Mostra os detalhes somente depois de escolher uma pílula.
+                androidx.compose.animation.AnimatedVisibility(
+                    // Mantém a seção recolhida inicialmente.
+                    visible = diaAberto != null
+                ) {
+                    Column(
+                        // Separa os detalhes das pílulas.
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                    ) {
+                        Text(
+                            // Explicita a data selecionada.
+                            text = "Compromissos de " + diaAberto.orEmpty(),
+                            // Destaca a data.
+                            fontWeight = FontWeight.SemiBold,
+                            // Mantém o tamanho do conteúdo.
+                            fontSize = 14.sp,
+                            // Usa a cor principal.
+                            color = TextoInicio
+                        )
+
+                        if (registros.isEmpty()) {
+                            Text(
+                                // Explica quando o dia não tem registros.
+                                text = "Nenhum compromisso neste dia.",
+                                // Separa a mensagem do título.
+                                modifier = Modifier.padding(top = 8.dp),
+                                // Mantém o texto secundário.
+                                fontSize = 14.sp,
+                                // Usa a cor marrom.
+                                color = MarromInicio
+                            )
+                        } else {
+                            // Limita a prévia para não alongar demais a tela inicial.
+                            // Mantém até três cartões na prévia do dia.
+                            registros.take(3).forEach { compromisso ->
+                                // Localiza a ficha pelo vínculo salvo no compromisso.
+                                val animalVinculado = animais.firstOrNull {
+                                    it.id == compromisso.animalId
+                                }
+
+                                // Separa os cartões e o título da data.
+                                Spacer(Modifier.height(10.dp))
+
+                                // Reutiliza exatamente o cartão da agenda.
+                                CartaoCompromissoAgendaUnica(
+                                    // Exibe título, data, horário e categoria.
+                                    compromisso = compromisso,
+                                    // Usa a foto da ficha quando houver animal vinculado.
+                                    animal = animalVinculado,
+                                    // Não adiciona fotos fictícias aos compromissos.
+                                    fotoIlustrativa = null,
+                                    // Abre os detalhes desse registro.
+                                    aoClicar = {
+                                        aoAbrirCompromisso(compromisso.id)
+                                    }
+                                )
+                            }
+                        }
+
+                        TextButton(
+                            // Abre o dia selecionado no calendário completo.
+                            onClick = {
+                                diaAberto?.let { aoAbrirDia(it) }
+                            }
+                        ) {
+                            Text(
+                                // Dá acesso também aos registros além dos três da prévia.
+                                text = "Abrir este dia na agenda",
+                                // Mantém a cor dos links.
+                                color = MarromInicio
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+// Apresenta ocupação, vagas disponíveis e adoções.
+@Composable
+private fun OcupacaoAbrigoInicio(
+    totalAnimais: Int,
+    adotados: Int,
+    capacidade: Int,
+    aoVerDados: () -> Unit
+) {
+    // Mantém as contagens iguais ou maiores que zero.
+    val noAbrigo = totalAnimais.coerceAtLeast(0)
+    val totalAdotados = adotados.coerceAtLeast(0)
+
+    // Evita calcular percentual sem uma capacidade válida.
+    val temCapacidade = capacidade > 0
+
+    // Calcula a proporção de vagas ocupadas.
+    val proporcao = if (temCapacidade) {
+        noAbrigo.toFloat() / capacidade
+    } else {
+        0f
+    }
+
+    // Impede a apresentação de vagas negativas.
+    val vagas = (capacidade - noAbrigo).coerceAtLeast(0)
+
+    // Formata o percentual com arredondamento.
+    val percentual = if (temCapacidade) {
+        String.format(
+            Locale("pt", "BR"),
+            "%.0f%%",
+            proporcao * 100
+        )
+    } else {
+        "--"
+    }
+
+    // Identifica cada estatística por uma cor.
+    val azulVagas = Color(0xFF2684C7)
+    val vermelhoAdotados = Color(0xFFC84F5E)
+    val verdeAbrigo = Color(0xFF43864A)
+
+    Column(
+        // Ocupa a largura disponível.
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            // Distribui título e botão na mesma linha.
+            modifier = Modifier.fillMaxWidth(),
+            // Alinha os elementos verticalmente.
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                // Identifica o gráfico.
+                text = "Nível de ocupação",
+                // Reserva espaço para o botão.
+                modifier = Modifier.weight(1f),
+                // Mantém o padrão de tamanho dos títulos.
+                fontSize = 18.sp,
+                // Destaca o título.
+                fontWeight = FontWeight.Bold,
+                // Usa a cor principal do aplicativo.
+                color = TextoInicio
+            )
+
+            TextButton(
+                // Abre os dados cadastrados do abrigo.
+                onClick = aoVerDados
+            ) {
+                Text(
+                    // Identifica a navegação.
+                    text = "Ver dados",
+                    // Mantém o padrão dos links.
+                    color = MarromInicio,
+                    // Define o tamanho do link.
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Row(
+            // Ocupa a largura da seção.
+            modifier = Modifier.fillMaxWidth(),
+            // Centraliza o círculo em relação às estatísticas.
+            verticalAlignment = Alignment.CenterVertically,
+            // Separa o gráfico dos números.
+            horizontalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Box(
+                // Define o tamanho do círculo.
+                modifier = Modifier.size(112.dp),
+                // Centraliza os textos dentro dele.
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    // Representa somente a ocupação das vagas.
+                    progress = { proporcao.coerceIn(0f, 1f) },
+                    // Preenche o espaço reservado.
+                    modifier = Modifier.fillMaxSize(),
+                    // Destaca em verde as vagas ocupadas.
+                    color = verdeAbrigo,
+                    // Representa em azul claro a parte disponível.
+                    trackColor = azulVagas.copy(alpha = 0.18f),
+                    // Define a espessura do círculo.
+                    strokeWidth = 10.dp
+                )
+
+                Column(
+                    // Centraliza os dois textos.
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        // Mostra o percentual de ocupação.
+                        text = percentual,
+                        // Destaca o percentual.
+                        fontSize = 26.sp,
+                        // Usa negrito.
+                        fontWeight = FontWeight.Bold,
+                        // Relaciona o percentual aos animais no abrigo.
+                        color = verdeAbrigo
+                    )
+
+                    Text(
+                        // Explica o significado do percentual.
+                        text = "ocupado",
+                        // Mantém o texto dentro do círculo.
+                        fontSize = 12.sp,
+                        // Usa a cor principal.
+                        color = TextoInicio
+                    )
+                }
+            }
+
+            Column(
+                // Utiliza o espaço restante.
+                modifier = Modifier.weight(1f),
+                // Separa as três estatísticas.
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                EstatisticaAbrigoInicio(
+                    // Identifica os espaços ainda disponíveis.
+                    titulo = "Vagas disponíveis",
+                    // Não inventa vagas sem capacidade cadastrada.
+                    valor = if (temCapacidade) vagas.toString() else "--",
+                    // Associa vagas à cor azul.
+                    cor = azulVagas
+                )
+
+                EstatisticaAbrigoInicio(
+                    // Identifica as adoções registradas.
+                    titulo = "Animais adotados",
+                    // Mostra a contagem recebida.
+                    valor = totalAdotados.toString(),
+                    // Associa adoções à cor vermelha.
+                    cor = vermelhoAdotados
+                )
+
+                EstatisticaAbrigoInicio(
+                    // Identifica os animais atualmente acolhidos.
+                    titulo = "Animais no abrigo",
+                    // Mostra a quantidade que ocupa vagas.
+                    valor = noAbrigo.toString(),
+                    // Associa ocupação à cor verde.
+                    cor = verdeAbrigo
+                )
+            }
+        }
+
+        if (!temCapacidade) {
+            Text(
+                // Orienta quando falta cadastrar a capacidade.
+                text = "Defina a capacidade em Meu abrigo.",
+                // Separa a orientação do gráfico.
+                modifier = Modifier.padding(top = 12.dp),
+                // Define o tamanho da orientação.
+                fontSize = 13.sp,
+                // Mantém a cor secundária.
+                color = MarromInicio
+            )
+        }
+    }
+}
+
+// Padroniza o marcador, o nome e o valor de cada estatística.
+@Composable
+private fun EstatisticaAbrigoInicio(
+    titulo: String,
+    valor: String,
+    cor: Color
+) {
+    Row(
+        // Alinha o marcador ao centro dos textos.
+        verticalAlignment = Alignment.CenterVertically,
+        // Separa o marcador das informações.
+        horizontalArrangement = Arrangement.spacedBy(9.dp)
+    ) {
+        Box(
+            // Desenha um pequeno marcador colorido.
+            modifier = Modifier
+                .size(10.dp)
+                .background(cor, CircleShape)
+        )
+
+        Column(
+            // Permite acomodar os textos na largura restante.
+            modifier = Modifier.weight(1f)
+        ) {
+            Text(
+                // Mostra o nome da estatística.
+                text = titulo,
+                // Mantém os rótulos compactos e legíveis.
+                fontSize = 13.sp,
+                // Mantém contraste sem depender apenas da cor.
+                color = TextoInicio
+            )
+
+            Text(
+                // Mostra a quantidade correspondente.
+                text = valor,
+                // Destaca o número.
+                fontSize = 23.sp,
+                // Aplica negrito.
+                fontWeight = FontWeight.Bold,
+                // Repete a cor do marcador.
+                color = cor
+            )
         }
     }
 }

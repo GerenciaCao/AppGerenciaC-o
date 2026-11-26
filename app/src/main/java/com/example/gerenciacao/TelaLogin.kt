@@ -146,48 +146,72 @@ fun TelaLogin(
             colors = coresCampo()
         )
 
-         // Mostra o acesso direto somente durante a demonstração.
-         if (MODO_DEMONSTRACAO) {
+        // Posiciona a recuperação de senha abaixo do campo, à direita.
+        Row(
+            // Ocupa a largura do formulário.
+            modifier = Modifier.fillMaxWidth(),
+            // Alinha o link ao canto direito.
+            horizontalArrangement = Arrangement.End
+        ) {
             TextButton(
-                // Abre o Início sem validar e-mail ou senha.
-                onClick = aoAcessar
+                // Abre a recuperação de senha já existente.
+                onClick = aoRecuperarSenha,
+                // Mantém o link próximo da borda direita.
+                contentPadding = PaddingValues(
+                    horizontal = 0.dp,
+                    vertical = 8.dp
+                )
             ) {
                 Text(
-                    // Identifica o acesso demonstrativo.
-                    text = "Primeiro acesso",
-
-                    // Mantém a cor dos links do login.
+                    // Identifica a recuperação da conta.
+                    text = "Esqueci minha senha",
+                    // Mantém a cor marrom dos links.
                     color = Marrom,
-
-                    // Define o tamanho da legenda.
-                    fontSize = 15.sp,
-
+                    // Define o tamanho do texto.
+                    fontSize = 13.sp,
                     // Destaca o link.
                     fontWeight = FontWeight.SemiBold
                 )
             }
-
-             // Mantém uma distância pequena entre os links.
-             Spacer(Modifier.height(3.dp))
-        }
-        // Recuperação de senha.
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End
-        ) {
-            TextButton(onClick = aoRecuperarSenha) {
-                Text(
-                    text = "Esqueci minha senha",
-                    color = Marrom,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
         }
 
+        // Separa o link dos botões de acesso.
         Spacer(Modifier.height(12.dp))
 
-        // Botão principal.
+        // Exibe o botão enquanto o modo de demonstração estiver ativo.
+        if (MODO_DEMONSTRACAO) {
+            Button(
+                // Entra diretamente no Início sem exigir e-mail ou senha.
+                onClick = aoAcessar,
+                // Usa a mesma largura e altura do botão Acessar.
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(54.dp),
+                // Mantém o mesmo arredondamento do botão Acessar.
+                shape = RoundedCornerShape(15.dp),
+                // Diferencia a demonstração com fundo marrom e texto branco.
+                colors = ButtonDefaults.buttonColors(
+                    // Define o fundo do botão.
+                    containerColor = Color(0xFF432818),
+                    // Define a cor do texto.
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    // Substitui o nome Primeiro acesso.
+                    text = "Demonstração",
+                    // Mantém o mesmo tamanho de texto do botão Acessar.
+                    fontSize = 17.sp,
+                    // Destaca o nome da ação.
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // Separa Demonstração do botão Acessar.
+            Spacer(Modifier.height(12.dp))
+        }
+
+         // Mostra o acesso direto somente durante a demonstração.
         Button(
             onClick = {
                 // Valida o formato dos dados sem consultar contas no banco de dados.
@@ -214,7 +238,7 @@ fun TelaLogin(
             )
         ) {
             Text(
-                text = "Acessar",
+                text = "Entrar",
                 fontSize = 17.sp,
                 fontWeight = FontWeight.Bold
             )
